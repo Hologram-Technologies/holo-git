@@ -3,18 +3,19 @@
 A serverless code-hosting application that runs entirely in the browser, built as a Prism application.
 Gitea is the reference for features. LexLean specifies the rules and Lean proves them. Storage is content-addressed with kappa labels.
 
-Status: Phase 1, first slice. No holo has been built yet.
+Status: Phase 1 in progress. The holo builds on GitHub Actions and replays 13 of 13 acceptance vectors. It rates P0: it does not yet carry provenance, proof or replay statements inside it.
 
 ## What is proved today
 
-Lean checks 12 theorems in `src/`.
+Lean checks 19 theorems in `src/`.
 
 - Authorization (`Access`, `AccessProofs`): an unsigned, revoked or expired operation never counts; no grant cannot read; owner permits everything; access is reflexive and transitive.
+- Delegation (`Delegation`, `DelegationProofs`): a revoked, unsigned or dead link grants nothing; a link never widens access and never exceeds its scope. Expiry is three separate lemmas, not one end-to-end statement.
 - Addressing (`Address`): the restore decision is true exactly when the claimed and observed labels match.
-- Operation order (`OpLog`): the order is irreflexive, asymmetric and transitive.
+- Operation order (`OpLog`, `OpLogProofs`): the order is irreflexive, asymmetric and transitive.
 
-The entry point (`TextRequest`) answers `allow`, `deny` or `invalid` for a 6-byte authorization request.
-Addressing and operation order are proved but not yet reachable from the entry point.
+The entry point (`TextRequest`) answers three operations: authorize, order, and narrow through one delegation link.
+Addressing is proved but not yet reachable from the entry point. Chains of several links are not modelled.
 
 ## Read next
 
