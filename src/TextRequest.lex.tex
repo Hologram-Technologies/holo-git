@@ -1,0 +1,73 @@
+\begin{lexlean}{TextRequest}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\useglossary{prism.arch@1.0.0}
+\importmodule{Access}
+\importmodule{Foundation.Bytes}
+\importmodule{Foundation.Utf8}
+\importmodule{Foundation.View.Text.V1.Model}
+\title{Text application model}
+\begin{semanticmodule}
+definition{
+  name: application,
+  parameters: [],
+  result: Foundation.View.Text.V1.Model::TextApplication,
+  body: (record Foundation.View.Text.V1.Model::TextApplication {profile := "prismpm/text-application/1", name := "Text Request", cargoName := "prism-text-request", cargoVersion := "0.1.0", cargoDescription := "A modeled byte-request conformance fixture.", cargoRepository := "https://github.com/UOR-Foundation/PrismPM", cargoHomepage := "https://github.com/UOR-Foundation/PrismPM", libraryRoots := (cons "PrismTextRequest.TextRequest.dispatch" (nil String)), acceptanceVectors := (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x010100010202, response := 0x616c6c6f77}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x010101010402, response := 0x64656e79}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x010000010402, response := 0x64656e79}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x010100010102, response := 0x64656e79}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x020100010202, response := 0x696e76616c6964}) (cons (record Foundation.View.Text.V1.Model::AcceptanceVector {request := 0x6161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161, response := 0x696e76616c6964}) (nil Foundation.View.Text.V1.Model::AcceptanceVector)))))))), entryRoot := "PrismTextRequest.TextRequest.dispatch", coreContract := "hologram:guest/core-wasm@1", requestMaximum := (64 : UInt32), responseMaximum := (256 : UInt32), guestAllocationMaximum := (128 : UInt32), capabilitiesEmpty := true, fatArchive := true, primaryLayer := (0 : UInt8), viewLayer := (1 : UInt8), view := (record Foundation.View.Text.V1.Model::TextView {title := "Text request — UTF-8", heading := "Text request", inputLabel := "Request", submitLabel := "Submit", outputLabel := "Response", inputError := "Invalid request", responseError := "Invalid response"})})
+}
+
+definition{
+  name: flagAt,
+  parameters: [value : Bytes, offset : Nat],
+  result: Access::Flag,
+  body: (match (Foundation.Bytes::byteAt value offset)
+    | Option.none => (ctor Access::Flag.no)
+    | Option.some byte => (if ((prim to_nat byte : Nat) =? 1) then (ctor Access::Flag.yes) else (ctor Access::Flag.no))),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: revokedAt,
+  parameters: [value : Bytes, offset : Nat],
+  result: Access::Flag,
+  body: (match (Foundation.Bytes::byteAt value offset)
+    | Option.none => (ctor Access::Flag.yes)
+    | Option.some byte => (if ((prim to_nat byte : Nat) =? 0) then (ctor Access::Flag.no) else (ctor Access::Flag.yes))),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: modeOf,
+  parameters: [code : Nat, unknown : Access::AccessMode],
+  result: Access::AccessMode,
+  body: (if (code =? 0) then (ctor Access::AccessMode.none) else (if (code =? 1) then (ctor Access::AccessMode.read) else (if (code =? 2) then (ctor Access::AccessMode.write) else (if (code =? 3) then (ctor Access::AccessMode.admin) else (if (code =? 4) then (ctor Access::AccessMode.owner) else unknown)))))
+}
+
+definition{
+  name: modeAt,
+  parameters: [value : Bytes, offset : Nat, unknown : Access::AccessMode],
+  result: Access::AccessMode,
+  body: (match (Foundation.Bytes::byteAt value offset)
+    | Option.none => unknown
+    | Option.some byte => (modeOf (prim to_nat byte : Nat) unknown)),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: evidenceOf,
+  parameters: [value : Bytes],
+  result: Access::Evidence,
+  body: (record Access::Evidence {signed := (flagAt value 1), revoked := (revokedAt value 2), live := (flagAt value 3), granted := (modeAt value 4 (ctor Access::AccessMode.none)), required := (modeAt value 5 (ctor Access::AccessMode.owner))}),
+  axioms: [Quot.sound, propext]
+}
+
+definition{
+  name: dispatch,
+  parameters: [value : Bytes],
+  result: Bytes,
+  body: (if ((Foundation.Bytes::byteLength value) =? 6) then (match (Foundation.Bytes::byteAt value 0)
+    | Option.none => 0x696e76616c6964
+    | Option.some op => (if ((prim to_nat op : Nat) =? 1) then (if (Access::authorize (evidenceOf value)) then 0x616c6c6f77 else 0x64656e79) else 0x696e76616c6964)) else 0x696e76616c6964),
+  axioms: [Quot.sound, propext]
+}
+\end{semanticmodule}
+\end{lexlean}

@@ -1,0 +1,139 @@
+\begin{lexlean}{AccessProofs}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\useglossary{prism.arch@1.0.0}
+\importmodule{Access}
+\title{Text application model}
+\begin{semanticmodule}
+theorem{
+  name: unsigned_never_counts,
+  parameters: [
+    revoked : Access::Flag,
+    live : Access::Flag,
+    granted : Access::AccessMode,
+    required : Access::AccessMode
+  ],
+  statement: ((Access::authorize (record Access::Evidence {signed := (ctor Access::Flag.no), revoked := revoked, live := live, granted := granted, required := required})) = false),
+  proof: reflexivity{}
+}
+
+theorem{
+  name: revoked_never_counts,
+  parameters: [
+    signed : Access::Flag,
+    live : Access::Flag,
+    granted : Access::AccessMode,
+    required : Access::AccessMode
+  ],
+  statement: ((Access::authorize (record Access::Evidence {signed := signed, revoked := (ctor Access::Flag.yes), live := live, granted := granted, required := required})) = false),
+  proof: cases{
+    branches: [
+      {proof: reflexivity{}, binders: [], constructor: no},
+      {proof: reflexivity{}, binders: [], constructor: yes}
+    ],
+    scrutinee: signed
+  }
+}
+
+theorem{
+  name: expired_never_counts,
+  parameters: [
+    signed : Access::Flag,
+    revoked : Access::Flag,
+    granted : Access::AccessMode,
+    required : Access::AccessMode
+  ],
+  statement: ((Access::authorize (record Access::Evidence {signed := signed, revoked := revoked, live := (ctor Access::Flag.no), granted := granted, required := required})) = false),
+  proof: cases{
+    branches: [
+      {proof: reflexivity{}, binders: [], constructor: no},
+      {
+        proof: cases{
+          branches: [
+            {proof: reflexivity{}, binders: [], constructor: no},
+            {proof: reflexivity{}, binders: [], constructor: yes}
+          ],
+          scrutinee: revoked
+        },
+        binders: [],
+        constructor: yes
+      }
+    ],
+    scrutinee: signed
+  }
+}
+
+theorem{
+  name: no_grant_cannot_read,
+  parameters: [signed : Access::Flag, revoked : Access::Flag, live : Access::Flag],
+  statement: ((Access::authorize (record Access::Evidence {signed := signed, revoked := revoked, live := live, granted := (ctor Access::AccessMode.none), required := (ctor Access::AccessMode.read)})) = false),
+  proof: cases{
+    branches: [
+      {proof: reflexivity{}, binders: [], constructor: no},
+      {
+        proof: cases{
+          branches: [
+            {
+              proof: cases{
+                branches: [
+                  {proof: reflexivity{}, binders: [], constructor: no},
+                  {proof: reflexivity{}, binders: [], constructor: yes}
+                ],
+                scrutinee: live
+              },
+              binders: [],
+              constructor: no
+            },
+            {proof: reflexivity{}, binders: [], constructor: yes}
+          ],
+          scrutinee: revoked
+        },
+        binders: [],
+        constructor: yes
+      }
+    ],
+    scrutinee: signed
+  }
+}
+
+theorem{
+  name: permits_reflexive,
+  parameters: [mode : Access::AccessMode],
+  statement: ((Access::permits mode mode) = true),
+  proof: cases{
+    branches: [
+      {proof: reflexivity{}, binders: [], constructor: none},
+      {proof: reflexivity{}, binders: [], constructor: read},
+      {proof: reflexivity{}, binders: [], constructor: write},
+      {proof: reflexivity{}, binders: [], constructor: admin},
+      {proof: reflexivity{}, binders: [], constructor: owner}
+    ],
+    scrutinee: mode
+  }
+}
+
+theorem{
+  name: owner_permits_everything,
+  parameters: [required : Access::AccessMode],
+  statement: ((Access::permits (ctor Access::AccessMode.owner) required) = true),
+  proof: cases{
+    branches: [
+      {proof: reflexivity{}, binders: [], constructor: none},
+      {proof: reflexivity{}, binders: [], constructor: read},
+      {proof: reflexivity{}, binders: [], constructor: write},
+      {proof: reflexivity{}, binders: [], constructor: admin},
+      {proof: reflexivity{}, binders: [], constructor: owner}
+    ],
+    scrutinee: required
+  }
+}
+
+theorem{
+  name: permits_transitive,
+  parameters: [high : Access::AccessMode, middle : Access::AccessMode, low : Access::AccessMode],
+  statement: ((((Access::permits high middle) && (Access::permits middle low)) = true) -> ((Access::permits high low) = true)),
+  proof: linear_arithmetic{definitions: [Access::permits]},
+  axioms: [Quot.sound, propext]
+}
+\end{semanticmodule}
+\end{lexlean}

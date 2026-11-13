@@ -1,0 +1,72 @@
+\begin{lexlean}{Access}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\useglossary{prism.arch@1.0.0}
+\title{Text application model}
+\begin{semanticmodule}
+inductive{
+  name: AccessMode,
+  type_parameters: [],
+  parameters: [],
+  constructors: [
+    {name: none, fields: []},
+    {name: read, fields: []},
+    {name: write, fields: []},
+    {name: admin, fields: []},
+    {name: owner, fields: []}
+  ]
+}
+
+inductive{
+  name: Flag,
+  type_parameters: [],
+  parameters: [],
+  constructors: [{name: no, fields: []}, {name: yes, fields: []}]
+}
+
+structure{
+  name: Evidence,
+  type_parameters: [],
+  parameters: [],
+  fields: [
+    {name: signed, type: Flag},
+    {name: revoked, type: Flag},
+    {name: live, type: Flag},
+    {name: granted, type: AccessMode},
+    {name: required, type: AccessMode}
+  ]
+}
+
+definition{
+  name: rank,
+  parameters: [mode : AccessMode],
+  result: Nat,
+  body: (match mode
+    | AccessMode.none => 0
+    | AccessMode.read => 1
+    | AccessMode.write => 2
+    | AccessMode.admin => 3
+    | AccessMode.owner => 4)
+}
+
+definition{
+  name: permits,
+  parameters: [granted : AccessMode, required : AccessMode],
+  result: Bool,
+  body: ((rank required) <=? (rank granted))
+}
+
+definition{
+  name: authorize,
+  parameters: [evidence : Evidence],
+  result: Bool,
+  body: (match (project evidence signed)
+    | Flag.no => false
+    | Flag.yes => (match (project evidence revoked)
+      | Flag.yes => false
+      | Flag.no => (match (project evidence live)
+        | Flag.no => false
+        | Flag.yes => (permits (project evidence granted) (project evidence required)))))
+}
+\end{semanticmodule}
+\end{lexlean}

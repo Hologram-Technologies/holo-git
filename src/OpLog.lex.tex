@@ -1,0 +1,48 @@
+\begin{lexlean}{OpLog}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\useglossary{prism.arch@1.0.0}
+\title{Text application model}
+\begin{semanticmodule}
+definition{
+  name: before,
+  parameters: [clockA : Nat, authorA : Nat, idA : Nat, clockB : Nat, authorB : Nat, idB : Nat],
+  result: Bool,
+  body: ((clockA <? clockB) || ((clockA =? clockB) && ((authorA <? authorB) || ((authorA =? authorB) && (idA <? idB)))))
+}
+
+theorem{
+  name: before_irreflexive,
+  parameters: [clock : Nat, author : Nat, serial : Nat],
+  statement: ((before clock author serial clock author serial) = false),
+  proof: linear_arithmetic{definitions: [before]},
+  axioms: [Quot.sound, propext]
+}
+
+theorem{
+  name: before_asymmetric,
+  parameters: [clockA : Nat, authorA : Nat, idA : Nat, clockB : Nat, authorB : Nat, idB : Nat],
+  statement: (((before clockA authorA idA clockB authorB idB) = true) -> ((before clockB authorB idB clockA authorA idA) = false)),
+  proof: linear_arithmetic{definitions: [before]},
+  axioms: [Quot.sound, propext]
+}
+
+theorem{
+  name: before_transitive,
+  parameters: [
+    clockA : Nat,
+    authorA : Nat,
+    idA : Nat,
+    clockB : Nat,
+    authorB : Nat,
+    idB : Nat,
+    clockC : Nat,
+    authorC : Nat,
+    idC : Nat
+  ],
+  statement: ((((before clockA authorA idA clockB authorB idB) && (before clockB authorB idB clockC authorC idC)) = true) -> ((before clockA authorA idA clockC authorC idC) = true)),
+  proof: linear_arithmetic{definitions: [before]},
+  axioms: [Classical.choice, Quot.sound, propext]
+}
+\end{semanticmodule}
+\end{lexlean}
