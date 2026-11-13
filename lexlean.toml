@@ -1,9 +1,9 @@
 spec = "lexlean/project/1"
-name = "prism-text-request"
+name = "holo-git"
 language = "1.2"
-module_prefix = "PrismTextRequest"
+module_prefix = "HoloGit"
 source_roots = ["src"]
-entrypoints = ["src/Access.lex.tex", "src/AccessProofs.lex.tex", "src/Address.lex.tex", "src/Delegation.lex.tex", "src/DelegationProofs.lex.tex", "src/OpLog.lex.tex", "src/OpLogProofs.lex.tex", "src/TextRequest.lex.tex"]
+entrypoints = ["src/Access.lex.tex", "src/AccessProofs.lex.tex", "src/Address.lex.tex", "src/Delegation.lex.tex", "src/DelegationProofs.lex.tex", "src/Kernel.lex.tex", "src/OpLog.lex.tex", "src/OpLogProofs.lex.tex"]
 build_root = ".lexlean"
 lockfile = "lexlean.lock"
 lean_workspace = "."

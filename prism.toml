@@ -1,7 +1,7 @@
 [application]
 name = "holo-git"
 version = "0.1.0"
-description = "A text application: a UTF-8 request in, a response out, six acceptance vectors (language 1.2)."
+description = "Decision kernel for serverless code hosting: authorization, delegation and operation order."
 
 [model]
 source = "src"

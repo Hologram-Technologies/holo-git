@@ -1,6 +1,6 @@
-name = "PrismTextRequest"
+name = "HoloGit"
 version = "0.1.0"
-defaultTargets = ["PrismTextRequest"]
+defaultTargets = ["HoloGit"]
 
 [[lean_lib]]
-name = "PrismTextRequest"
+name = "HoloGit"

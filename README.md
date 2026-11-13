@@ -14,7 +14,7 @@ Lean checks 19 theorems in `src/`.
 - Addressing (`Address`): the restore decision is true exactly when the claimed and observed labels match.
 - Operation order (`OpLog`, `OpLogProofs`): the order is irreflexive, asymmetric and transitive.
 
-The entry point (`TextRequest`) answers three operations: authorize, order, and narrow through one delegation link.
+The entry point (`Kernel`) answers three operations: authorize, order, and narrow through one delegation link.
 Addressing is proved but not yet reachable from the entry point. Chains of several links are not modelled.
 
 ## Read next
