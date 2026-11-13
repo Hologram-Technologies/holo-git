@@ -1,0 +1,49 @@
+\begin{lexlean}{Delegation}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\useglossary{prism.arch@1.0.0}
+\importmodule{Access}
+\title{Text application model}
+\begin{semanticmodule}
+definition{
+  name: minMode,
+  parameters: [left : Access::AccessMode, right : Access::AccessMode],
+  result: Access::AccessMode,
+  body: (if ((Access::rank left) <=? (Access::rank right)) then left else right)
+}
+
+definition{
+  name: narrowBy,
+  parameters: [held : Access::AccessMode, scope : Access::AccessMode, signed : Access::Flag, revoked : Access::Flag, live : Access::Flag],
+  result: Access::AccessMode,
+  body: (match revoked
+    | Access::Flag.yes => (ctor Access::AccessMode.none)
+    | Access::Flag.no => (match signed
+      | Access::Flag.no => (ctor Access::AccessMode.none)
+      | Access::Flag.yes => (match live
+        | Access::Flag.no => (ctor Access::AccessMode.none)
+        | Access::Flag.yes => (minMode held scope))))
+}
+
+definition{
+  name: liveRank,
+  parameters: [notAfter : Nat, now : Nat],
+  result: Nat,
+  body: (if (now <=? notAfter) then 1 else 0)
+}
+
+definition{
+  name: flagOf,
+  parameters: [value : Nat],
+  result: Access::Flag,
+  body: (if (value =? 1) then (ctor Access::Flag.yes) else (ctor Access::Flag.no))
+}
+
+definition{
+  name: narrow,
+  parameters: [held : Access::AccessMode, scope : Access::AccessMode, signed : Access::Flag, revoked : Access::Flag, notAfter : Nat, now : Nat],
+  result: Access::AccessMode,
+  body: (narrowBy held scope signed revoked (flagOf (liveRank notAfter now)))
+}
+\end{semanticmodule}
+\end{lexlean}

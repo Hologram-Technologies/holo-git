@@ -1,0 +1,2291 @@
+\begin{lexlean}{DelegationProofs}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\useglossary{prism.arch@1.0.0}
+\importmodule{Access}
+\importmodule{Delegation}
+\title{Text application model}
+\begin{semanticmodule}
+theorem{
+  name: revoked_link_grants_nothing,
+  parameters: [held : Access::AccessMode, scope : Access::AccessMode, signed : Access::Flag, live : Access::Flag],
+  statement: ((Delegation::narrowBy held scope signed (ctor Access::Flag.yes) live) = (ctor Access::AccessMode.none)),
+  proof: reflexivity{}
+}
+
+theorem{
+  name: unsigned_link_grants_nothing,
+  parameters: [held : Access::AccessMode, scope : Access::AccessMode, revoked : Access::Flag, live : Access::Flag],
+  statement: ((Delegation::narrowBy held scope (ctor Access::Flag.no) revoked live) = (ctor Access::AccessMode.none)),
+  proof: cases{
+    branches: [
+      {proof: reflexivity{}, binders: [], constructor: no},
+      {proof: reflexivity{}, binders: [], constructor: yes}
+    ],
+    scrutinee: revoked
+  }
+}
+
+theorem{
+  name: dead_link_grants_nothing,
+  parameters: [held : Access::AccessMode, scope : Access::AccessMode, signed : Access::Flag, revoked : Access::Flag],
+  statement: ((Delegation::narrowBy held scope signed revoked (ctor Access::Flag.no)) = (ctor Access::AccessMode.none)),
+  proof: cases{
+    branches: [
+      {proof: cases{
+        branches: [
+          {proof: reflexivity{}, binders: [], constructor: no},
+          {proof: reflexivity{}, binders: [], constructor: yes}
+        ],
+        scrutinee: signed
+      }, binders: [], constructor: no},
+      {proof: cases{
+        branches: [
+          {proof: reflexivity{}, binders: [], constructor: no},
+          {proof: reflexivity{}, binders: [], constructor: yes}
+        ],
+        scrutinee: signed
+      }, binders: [], constructor: yes}
+    ],
+    scrutinee: revoked
+  }
+}
+
+theorem{
+  name: expired_link_has_no_life,
+  parameters: [notAfter : Nat, now : Nat],
+  statement: (((notAfter <? now) = true) -> ((Delegation::liveRank notAfter now) = 0)),
+  proof: linear_arithmetic{definitions: [Delegation::liveRank]},
+  axioms: [Quot.sound, propext]
+}
+
+theorem{
+  name: no_life_is_not_live,
+  parameters: [],
+  statement: ((Delegation::flagOf 0) = (ctor Access::Flag.no)),
+  proof: reflexivity{}
+}
+
+theorem{
+  name: link_never_widens,
+  parameters: [held : Access::AccessMode, scope : Access::AccessMode, signed : Access::Flag, revoked : Access::Flag, live : Access::Flag],
+  statement: ((Access::permits held (Delegation::narrowBy held scope signed revoked live)) = true),
+  proof: cases{
+    branches: [
+      {proof: cases{
+        branches: [
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: none},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: read},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: write},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: admin},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: owner}
+        ],
+        scrutinee: scope
+      }, binders: [], constructor: none},
+      {proof: cases{
+        branches: [
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: none},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: read},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: write},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: admin},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: owner}
+        ],
+        scrutinee: scope
+      }, binders: [], constructor: read},
+      {proof: cases{
+        branches: [
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: none},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: read},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: write},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: admin},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: owner}
+        ],
+        scrutinee: scope
+      }, binders: [], constructor: write},
+      {proof: cases{
+        branches: [
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: none},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: read},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: write},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: admin},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: owner}
+        ],
+        scrutinee: scope
+      }, binders: [], constructor: admin},
+      {proof: cases{
+        branches: [
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: none},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: read},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: write},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: admin},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: owner}
+        ],
+        scrutinee: scope
+      }, binders: [], constructor: owner}
+    ],
+    scrutinee: held
+  }
+}
+
+theorem{
+  name: link_never_exceeds_scope,
+  parameters: [held : Access::AccessMode, scope : Access::AccessMode, signed : Access::Flag, revoked : Access::Flag, live : Access::Flag],
+  statement: ((Access::permits scope (Delegation::narrowBy held scope signed revoked live)) = true),
+  proof: cases{
+    branches: [
+      {proof: cases{
+        branches: [
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: none},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: read},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: write},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: admin},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: owner}
+        ],
+        scrutinee: scope
+      }, binders: [], constructor: none},
+      {proof: cases{
+        branches: [
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: none},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: read},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: write},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: admin},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: owner}
+        ],
+        scrutinee: scope
+      }, binders: [], constructor: read},
+      {proof: cases{
+        branches: [
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: none},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: read},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: write},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: admin},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: owner}
+        ],
+        scrutinee: scope
+      }, binders: [], constructor: write},
+      {proof: cases{
+        branches: [
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: none},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: read},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: write},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: admin},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: owner}
+        ],
+        scrutinee: scope
+      }, binders: [], constructor: admin},
+      {proof: cases{
+        branches: [
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: none},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: read},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: write},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: admin},
+          {proof: cases{
+            branches: [
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: no},
+              {proof: cases{
+                branches: [
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: no},
+                  {proof: cases{
+                    branches: [
+                      {proof: reflexivity{}, binders: [], constructor: no},
+                      {proof: reflexivity{}, binders: [], constructor: yes}
+                    ],
+                    scrutinee: live
+                  }, binders: [], constructor: yes}
+                ],
+                scrutinee: revoked
+              }, binders: [], constructor: yes}
+            ],
+            scrutinee: signed
+          }, binders: [], constructor: owner}
+        ],
+        scrutinee: scope
+      }, binders: [], constructor: owner}
+    ],
+    scrutinee: held
+  }
+}
+\end{semanticmodule}
+\end{lexlean}
