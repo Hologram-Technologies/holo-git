@@ -58,3 +58,6 @@ textarea { width: 100%; padding: 10px; border: 1px solid var(--line); border-rad
 .edit button { align-self: flex-start; }
 .tools { margin: 0 0 12px; }
 .tools button { padding: 4px 10px; font-size: 13px; }
+.push { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.push input { flex: 1 1 260px; padding: 4px 8px; font-size: 13px; }
+.tools p { margin: 0 0 8px; }

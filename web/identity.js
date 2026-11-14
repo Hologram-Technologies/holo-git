@@ -29,7 +29,7 @@ function statement(r) {
   return utf8.encode(fields.join('\n'));
 }
 
-const recordDigest = (record) => sha256(utf8.encode(`${new TextDecoder().decode(statement(record))}\n${record.signature}`));
+export const recordDigest = (record) => sha256(utf8.encode(`${new TextDecoder().decode(statement(record))}\n${record.signature}`));
 
 export async function verifyRecord(record) {
   try {
@@ -50,9 +50,12 @@ export async function moveRef({ repo, ref, old, next, parents }) {
     previous: log.length ? await recordDigest(log[log.length - 1]) : '' };
   record.signature = b64(await crypto.subtle.sign(SIGN, key.pair.privateKey, statement(record)));
   const signed = await verifyRecord(record);
-  // On this device the key that made the clone owns it. Grants from other people arrive in a later phase.
-  if (!authorize({ signed, revoked: false, live: true, granted: MODE.owner, required: MODE.write })) {
-    throw new Error('refused by the kernel: this ref update does not count');
+  // The first signer of a repository's log owns it. A fresh clone with no log belongs to this device.
+  // Grants from other people arrive in a later phase; until then nobody else's updates count.
+  const owner = log.length ? log[0].key : key.id;
+  const granted = owner === key.id ? MODE.owner : MODE.none;
+  if (!authorize({ signed, revoked: false, live: true, granted, required: MODE.write })) {
+    throw new Error(granted === MODE.none ? 'refused by the kernel: this device has no write access to this repository' : 'refused by the kernel: this ref update does not count');
   }
   await appendRefUpdate(record);
   return record;

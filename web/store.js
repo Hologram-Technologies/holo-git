@@ -107,3 +107,20 @@ export async function appendRefUpdate(record) {
   tx.objectStore('reflog').add(record);
   await done(tx);
 }
+
+// Replace this repository's log with one fetched from a replica (already verified by the caller).
+export async function replaceRefUpdates(repo, records) {
+  const tx = db.transaction('reflog', 'readwrite');
+  const store = tx.objectStore('reflog');
+  const keys = await ask(store.getAllKeys());
+  const values = await ask(store.getAll());
+  values.forEach((record, i) => { if (record.repo === repo) store.delete(keys[i]); });
+  for (const record of records) store.add(record);
+  await done(tx);
+}
+
+export async function setRepo(repo) {
+  const tx = db.transaction('repos', 'readwrite');
+  tx.objectStore('repos').put(repo, repo.name);
+  await done(tx);
+}

@@ -3,6 +3,7 @@
 
 import { readPack, readLoose, parseCommit, parseTree, open, makeObject, makeTree, makeCommit, makeBundle } from './engine.js';
 import { moveRef } from './identity.js';
+import { cloneReplica, PROTOCOL } from './replica.js';
 import { putObjects, hasObject, getObject, putRepo } from './store.js';
 
 const text = new TextDecoder();
@@ -19,6 +20,14 @@ export function repoName(url) {
 
 export async function clone(url, report = () => {}) {
   const base = url.replace(/\/+$/, '');
+  // A holo-git replica announces itself; anything else is read as a plain git repository served as files.
+  try {
+    const probe = await fetch(`${base}/state.json`, { cache: 'no-store' });
+    if (probe.ok) {
+      const state = await probe.json();
+      if (state && state.protocol === PROTOCOL) return cloneReplica(base, repoName(base), state, report);
+    }
+  } catch (error) { if (/^refused|replica/.test(error.message)) throw error; }
   const refs = {};
   for (const line of (await fetchText(`${base}/info/refs`)).split('\n')) {
     const [id, name] = line.split('\t');

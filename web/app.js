@@ -1,10 +1,11 @@
 // The page. Repository content is only ever placed with textContent, never parsed as HTML.
 
 import { loadEngine, open, diffLines, blameLines, splitLines } from './engine.js';
-import { openStore, getObject, getRepo, getRefs, listRepos, countObjects, stats, corruptObject } from './store.js';
+import { openStore, getObject, getRepo, getRefs, listRepos, countObjects, stats, corruptObject, setRepo } from './store.js';
 import { startShell } from './shell.js';
 import { loadKernel, decisions } from './kernel.js';
 import { checkLog } from './identity.js';
+import { push } from './replica.js';
 import { clone, resolveCommit, readTree, lookup, history, changedPaths, person, fileVersions, commitFile, bundleOf } from './git.js';
 
 const main = document.getElementById('main');
@@ -250,10 +251,24 @@ async function branchTools(repo, refs, ref) {
       note.textContent = ` ${bundle.objects} objects, ${bundle.bytes.length} bytes. Fetch it with: git pull ${repo.name}-${ref}.bundle ${ref}`;
     } catch (error) { note.textContent = ` ${error.message}`; }
   } }, 'Download as git bundle');
-  const state = log.entries === 0 ? 'No changes made on this device.'
-    : log.valid ? `${log.entries} change${log.entries === 1 ? '' : 's'} made on this device, each signed, signatures and chain verified.`
-      : 'The log of changes made on this device does NOT verify.';
-  return el('p', { class: log.valid ? 'tools' : 'tools error' }, state, ' ', button, note);
+  const state = log.entries === 0 ? 'No signed changes yet.'
+    : log.valid ? `${log.entries} change${log.entries === 1 ? '' : 's'} in this repository's signed log, signatures and chain verified.`
+      : 'This repository\'s signed log does NOT verify.';
+  const address = el('input', { type: 'url', 'aria-label': 'Replica address', placeholder: 'https://storage.example.org/project', value: repo.replica || '' });
+  const pushNote = el('span', { class: 'muted' });
+  const pushButton = el('button', { onclick: async () => {
+    try {
+      pushNote.textContent = ' pushing…';
+      const started = performance.now();
+      const result = await push(repo, ref, address.value, (message) => { pushNote.textContent = ` ${message}`; });
+      await setRepo({ ...repo, replica: address.value.replace(/\/+$/, '') });
+      pushNote.textContent = result.upToDate ? ' The replica is already up to date.'
+        : ` Pushed ${result.objects} objects and ${result.records} signed update${result.records === 1 ? '' : 's'} in ${Math.round(performance.now() - started)} ms.`;
+    } catch (error) { pushNote.textContent = ` ${error.message}`; }
+  } }, 'Push');
+  return el('div', { class: 'tools' },
+    el('p', { class: log.valid ? '' : 'error' }, state, ' ', button, note),
+    el('p', { class: 'push' }, address, pushButton, pushNote));
 }
 
 async function commitPage(repo, refs, id) {

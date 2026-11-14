@@ -16,7 +16,7 @@ We assume the user's browser and device are honest, and that the hash functions 
 | Threat | Defence | What remains |
 |---|---|---|
 | Replica alters bytes | every read re-derives the label; kernel `restoreDecision` | none for integrity |
-| Replica withholds data or serves an old head | signed, chained heads; several replicas; clients compare heads | a single-replica user can be kept stale without knowing |
+| Replica withholds data or serves an old head | signed, chained heads; several replicas; clients compare heads | a single-replica user can be kept stale without knowing. Confirmed by test: a fresh clone accepted a replica rolled back to an older signed state |
 | Replica shows different histories to different people | signed heads exchanged between clients expose the fork | detection, not prevention |
 | Replica reorders issue numbers | numbers follow the signed chain; reordering breaks the chain | the replica chooses order among concurrent arrivals |
 | Forged or unauthorized operation | signature check, then kernel `authorize`; uncounted if it fails | none if the kernel is asked every time |
