@@ -221,8 +221,53 @@ Limits specific to GitHub:
 
 - Results are kept in GitHub's Actions cache. A pull request can read results saved on its base branch, but the base branch cannot read results saved by a pull request. So the first push to `main` after a merge runs the affected checks once more, even though the same content was just checked on the pull request.
 - The cache is evicted after a week without use and when a repository's cache is full.
-- Results made on a developer's machine are not shared with CI. A shared, signed store of results would let a push arrive already checked; it does not exist yet.
+- Results made on a developer's machine reach CI only through a shared store; see the next section.
 - Everything under "What remains open" above applies: this is not a sandbox, and a failure caused by the runner is cached like any other until the content changes or the cache is cleared.
+
+## Share results, so a push arrives already checked
+
+Without a shared store, a check run on your machine is run again by CI. With one, the result you made before pushing is the result CI reads.
+
+A result is a small signed file. It is bound to the content by its action key, and signed by the machine that ran the check. A reader accepts it only if the signature verifies and the signing key is its own or on a list of trusted signers.
+
+1. Each machine that should be believed prints its key:
+
+   ```bash
+   node scripts/check.mjs key
+   ```
+
+2. Commit the keys to the protected branch as `.holo/signers.json`:
+
+   ```json
+   { "signers": [{ "name": "alice-laptop", "key": "<64 hex digits>" }] }
+   ```
+
+3. Before pushing, run the checks with the store named. Results made here are signed and written to it:
+
+   ```bash
+   node scripts/check.mjs run --store https://store.example/results-bucket --signers-ref origin/main
+   ```
+
+4. In CI, give the action the same two things:
+
+   ```yaml
+   - uses: humuhumu33/holo-git/.github/actions/checks@<commit>
+     with:
+       store: https://store.example/results-bucket
+       signers-ref: origin/main
+   ```
+
+The store is anything that answers GET and PUT: an S3-compatible bucket, or `scripts/dev-replica.mjs` for trying it out. For a bucket that needs signed requests, set `HOLO_S3_ACCESS_KEY` and `HOLO_S3_SECRET_KEY` in the environment. Readers need only read access.
+
+What to know before relying on it:
+
+- **The signers list is the whole of the trust.** A machine on it can sign a pass for content that fails, and will be believed. Keep it short. Nothing here re-runs a sample of shared results to catch that.
+- **Read the list from a ref the change cannot move.** `--signers-ref origin/main` reads the protected branch's list. Reading it from the change being checked would let its author add themselves; a test shows exactly that.
+- **A result says nothing about the machine it was made on** beyond the tools the check declared. If a check can pass on one system and fail on another, declare a tool that tells them apart, such as `{ "run": "uname -s", "expect": "Linux" }`; a machine where it prints something else will not run or reuse that check.
+- **A machine not on the list publishes nothing.** With no list at all, a machine trusts only itself, which still shares results between its own checkouts.
+- **A store that is down, or holds rubbish, costs time and nothing else.** An altered, moved or unsigned result is ignored and the check runs. Tested.
+- **The key is a file** (default `~/.holo-git/key.json`). Whoever has it can sign as that machine.
+- **Nothing here has run against a durable public store.** It is tested against the stand-in store only.
 
 ## Self-hosting: what has been done, and what has not
 

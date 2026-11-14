@@ -16,6 +16,18 @@
 // (a declared tool or environment variable is missing) is skipped; with --strict, or when the
 // check is named on the command line, that is a failure.
 //
+// Sharing results. With --store URL (or HOLO_STORE), a result made here is signed with this
+// machine's key and written to the store, and a result already there is reused instead of
+// running the check, if it was signed by this machine or by a key on the signers list (see
+// scripts/lib/results.mjs). So a check run before a push is the result everyone else reads.
+//   --key FILE          this machine's signing key (HOLO_KEY; default ~/.holo-git/key.json)
+//   --signers FILE      the list of trusted signers, or
+//   --signers-ref REF   read .holo/signers.json from that ref (HOLO_SIGNERS_REF). Name a ref the
+//                       change being checked cannot move, such as the protected branch: a list
+//                       read from the change itself would let its author trust themselves.
+//   --no-publish        read the store, write nothing to it
+//   node scripts/check.mjs key                     print this machine's key, to be put on a signers list
+//
 // Results live in .holo/results/<key>.json (override with HOLO_RESULTS). Working directories live
 // under the system's temporary directory (override with HOLO_WORK).
 //
@@ -24,11 +36,12 @@
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { actionKey, parseChecks, CHECKS_PATH } from '../web/checks.js';
 import { environmentFor, toolsFor, execute } from './lib/execute.mjs';
+import { SIGNERS_PATH, machineKey, openStore, parseSigners, sign } from './lib/results.mjs';
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1 << 26 }).trim();
 const top = git('rev-parse', '--show-toplevel');
@@ -94,7 +107,44 @@ function prepare(definition) {
   return directory;
 }
 
-async function run(names, all, strict, retry) {
+// Who is trusted, where results are shared, and whether this machine adds to them.
+async function sharing(options) {
+  const store = openStore(options.store);
+  if (!store) return null;
+  const me = await machineKey(options.key);
+  let listed = new Map();
+  if (options.signers) listed = parseSigners(readFileSync(options.signers, 'utf8'));
+  else if (options.signersRef) {
+    let text = null;
+    try { text = git('show', `${options.signersRef}:${SIGNERS_PATH}`); } catch (error) {
+      if (!/exists on disk, but not in|does not exist|invalid object name/i.test(String(error.stderr || error.message))) throw error;
+    }
+    if (text !== null) listed = parseSigners(text);
+  }
+  const trusted = new Map([...listed, [me.id, listed.get(me.id) || 'this machine']]);
+  // With a list, a machine that is not on it has nothing to add that anyone would accept.
+  const publishes = !options.noPublish && (!listed.size || listed.has(me.id));
+  return { store, me, trusted, publishes };
+}
+
+// A result from the store, in the shape results are kept in here, or null.
+async function shared(share, key, name) {
+  if (!share) return null;
+  const record = await share.store.find(key, name, share.trusted);
+  if (!record) return null;
+  return { name, key, result: record.result, seconds: record.seconds, at: new Date(record.time).toISOString(), commit: record.commit, tools: JSON.parse(record.tools), signed: record };
+}
+
+const save = (key, value) => { mkdirSync(results, { recursive: true }); writeFileSync(join(results, `${key}.json`), `${JSON.stringify(value, null, 2)}\n`); };
+
+async function publish(share, name, record) {
+  if (!share || !share.publishes || !record || record.key !== share.me.id) return;
+  const problem = await share.store.publish(record);
+  if (problem) console.log(`${name}: note, the result was not shared: ${problem}`);
+}
+
+async function run(names, all, strict, retry, options) {
+  const share = await sharing(options);
   const definitions = definitionsAt('HEAD');
   if (!definitions.size) { console.log(`no checks: ${CHECKS_PATH} is not in this commit`); return 0; }
   const wanted = names.length ? names : [...definitions.keys()];
@@ -118,9 +168,18 @@ async function run(names, all, strict, retry) {
     const key = await actionKey(definition, lookupIn('HEAD'));
     let known = all ? null : stored(key);
     if (known && retry && known.result !== 'pass') known = null;
+    let from = '';
+    if (!known && !all) {
+      known = await shared(share, key, name);
+      if (known && retry && known.result !== 'pass') known = null;
+      if (known) from = `, signed by ${share.trusted.get(known.signed.key)}`;
+    }
     // A stored result is reused only if it was made with tools that print what these print now.
     if (known && JSON.stringify(known.tools || []) === JSON.stringify(observed)) {
-      console.log(`${name}: ${known.result}, reused (${key.slice(0, 12)}, first run ${known.at}, took ${known.seconds}s then)`);
+      console.log(`${name}: ${known.result}, reused${from} (${key.slice(0, 12)}, first run ${known.at}, took ${known.seconds}s then)`);
+      if (from) save(key, known);
+      // A result made here before the store was named is shared now.
+      else if (share && known.signed && known.signed.key === share.me.id && !(await share.store.has(key, share.me.id))) await publish(share, name, known.signed);
       if (known.result !== 'pass') failed += 1;
       continue;
     }
@@ -129,8 +188,10 @@ async function run(names, all, strict, retry) {
     console.log(`${name}: running (${key.slice(0, 12)}): ${definition.run}`);
     const directory = prepare(definition);
     const { result, seconds } = execute(definition, join(directory, definition.cwd), env);
-    mkdirSync(results, { recursive: true });
-    writeFileSync(join(results, `${key}.json`), `${JSON.stringify({ name, key, result, seconds, at: new Date().toISOString(), commit: git('rev-parse', 'HEAD'), tools: observed }, null, 2)}\n`);
+    const commit = git('rev-parse', 'HEAD');
+    const signed = share ? await sign(share.me, { action: key, name, result, tools: observed, seconds, commit }) : undefined;
+    save(key, { name, key, result, seconds, at: new Date().toISOString(), commit, tools: observed, signed });
+    await publish(share, name, signed);
     console.log(`${name}: ${result} in ${seconds}s`);
     ran += 1;
     if (result !== 'pass') failed += 1;
@@ -139,10 +200,11 @@ async function run(names, all, strict, retry) {
   return failed ? 1 : 0;
 }
 
-async function keys() {
+async function keys(options) {
+  const share = await sharing(options);
   for (const definition of definitionsAt('HEAD').values()) {
     const key = await actionKey(definition, lookupIn('HEAD'));
-    const known = stored(key);
+    const known = stored(key) || await shared(share, key, definition.name);
     console.log(`${key}  ${definition.name}  ${known ? known.result : 'no result'}`);
   }
   return 0;
@@ -178,12 +240,21 @@ async function history(last, ref, file) {
 }
 
 const [command, ...rest] = process.argv.slice(2);
+const VALUED = ['--last', '--ref', '--definitions', '--store', '--key', '--signers', '--signers-ref'];
 const flag = (name) => rest.includes(name);
 const option = (name, fallback) => (rest.includes(name) ? rest[rest.indexOf(name) + 1] : fallback);
-const positional = rest.filter((arg, i) => !arg.startsWith('--') && !['--last', '--ref', '--definitions'].includes(rest[i - 1]));
+const positional = rest.filter((arg, i) => !arg.startsWith('--') && !VALUED.includes(rest[i - 1]));
+const options = {
+  store: option('--store', process.env.HOLO_STORE || ''),
+  key: resolve(option('--key', process.env.HOLO_KEY || join(homedir(), '.holo-git', 'key.json'))),
+  signers: option('--signers', ''),
+  signersRef: option('--signers-ref', process.env.HOLO_SIGNERS_REF || ''),
+  noPublish: flag('--no-publish'),
+};
 let code;
-if (command === 'run') code = await run(positional, flag('--all'), flag('--strict'), flag('--retry'));
-else if (command === 'keys') code = await keys();
+if (command === 'run') code = await run(positional, flag('--all'), flag('--strict'), flag('--retry'), options);
+else if (command === 'keys') code = await keys(options);
+else if (command === 'key') { console.log((await machineKey(options.key)).id); code = 0; }
 else if (command === 'history') code = await history(Number(option('--last', '50')), option('--ref', 'HEAD'), option('--definitions', null));
-else { console.log('usage: node scripts/check.mjs run [--all] [--retry] [--strict] [name...] | keys | history [--last N] [--ref REF] [--definitions FILE]'); code = 64; }
+else { console.log('usage: node scripts/check.mjs run [--all] [--retry] [--strict] [--store URL] [name...] | keys | key | history [--last N] [--ref REF] [--definitions FILE]'); code = 64; }
 process.exit(code);

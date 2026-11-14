@@ -19,6 +19,12 @@ inputs:
   cache:
     description: "'false' when an earlier step in the same job already restored the results."
     default: 'true'
+  store:
+    description: Address of a shared store of signed results. Empty means results stay in this repository's cache.
+    default: ''
+  signers-ref:
+    description: The ref to read .holo/signers.json from. Name the protected branch, never the change being checked.
+    default: ''
 
 outputs:
   missing:
@@ -40,6 +46,9 @@ runs:
     - name: See which checks have no result for this content
       id: plan
       shell: bash
+      env:
+        HOLO_STORE: ${{ inputs.store }}
+        HOLO_SIGNERS_REF: ${{ inputs.signers-ref }}
       run: |
         node "$GITHUB_ACTION_PATH/../../../scripts/check.mjs" keys | tee "$RUNNER_TEMP/holo-keys.log"
         echo "missing=$(grep '  no result$' "$RUNNER_TEMP/holo-keys.log" | awk '{print $2}' | tr '\n' ' ')" >>"$GITHUB_OUTPUT"
@@ -49,6 +58,8 @@ runs:
       env:
         HOLO_CHECKS: ${{ inputs.checks }}
         HOLO_STRICT: ${{ inputs.strict }}
+        HOLO_STORE: ${{ inputs.store }}
+        HOLO_SIGNERS_REF: ${{ inputs.signers-ref }}
       run: |
         set -o pipefail
         flags=''
