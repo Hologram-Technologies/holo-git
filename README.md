@@ -5,7 +5,7 @@ A serverless code-hosting application that runs entirely in the browser, built a
 Live page: https://humuhumu33.github.io/holo-git/ . Press Clone and it clones this repository from a static replica published beside it.
 Gitea is the reference for features. LexLean specifies the rules and Lean proves them. Storage is content-addressed with kappa labels.
 
-Status: Phase 1 complete, with the gaps listed below. Phase 2 works in the browser: clone, browse, diff, blame, offline. Phase 3: commit in the browser, push to a writable replica, clone it back, fetch and merge, grant and revoke access, export to git. The holo builds on GitHub Actions and replays 16 of 16 acceptance vectors. It rates P0: it does not yet carry provenance, proof or replay statements inside it.
+Status: Phase 1 complete, with the gaps listed below. Phase 2 works in the browser: clone, browse, diff, blame, offline. Self-hosting has begun; see below. Phase 3: commit in the browser, push to a writable replica, clone it back, fetch and merge, grant and revoke access, export to git. The holo builds on GitHub Actions and replays 16 of 16 acceptance vectors. It rates P0: it does not yet carry provenance, proof or replay statements inside it.
 
 ## What is proved today
 
@@ -166,6 +166,28 @@ Limits:
 - A grant names a device key, not a person. There is no key-to-identity binding yet.
 - Two people pushing at once: the second is told to fetch; see Fetch and merge.
 - The proofs cover the access rules. Assembling the request (reading the log, checking signatures, choosing which grant applies) is page code, tested by hand only.
+
+## Self-hosting: what has been done, and what has not
+
+On 2026-11-14 this repository was developed through itself for three changes, on one machine.
+
+What was done:
+
+- Its history (437 objects) was published from the git checkout to a SeaweedFS store with signed requests, in under six seconds.
+- Its `main` was protected with its own three checks: `engine`, `page` and `model`.
+- A direct publish to `main` was then refused by the kernel, and a pull request could not merge before its checks had results.
+- A runner ran the three checks for the first pull request and published signed results: 7 minutes 4 seconds, everything built from nothing.
+- The second and third pull requests changed only documentation. No check ran for them: the results were found in the signed log under the same keys. The runner took 3.8 seconds to establish that, and the merges went straight through.
+- The page, in a browser, cloned the repository from the store in 7.6 seconds (444 objects, one request each), verified its log, and showed the protection and the merged pull requests.
+- The result was fetched back into git and pushed to GitHub, which is now a mirror of what was merged there.
+
+What this is not:
+
+- **Not durable.** The store was a container on a development machine with throwaway keys. It is gone. Hosting this repository for real needs a store that stays up and keys that someone holds.
+- **Not public.** Nobody else could reach it. The live page is still built and served by GitHub.
+- **Not independent of GitHub.** The page is deployed by a GitHub workflow from the GitHub mirror, and the proved kernel is built there too.
+- **One person.** The owner proposed, the owner's runner checked, and the owner merged. No approvals were required, so no second person's judgement was involved.
+- **Seven minutes is slower than the CI it would replace** for a first run, because the runner builds each check in a fresh directory. The gain is entirely in the runs that then do not happen.
 
 ## Working from a git checkout
 
