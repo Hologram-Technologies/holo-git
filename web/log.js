@@ -14,10 +14,12 @@ import { expectedActions } from './evidence.js';
 import { isCheckName } from './checks.js';
 
 const KINDS = { ref: 'change', grant: 'grant', revoke: 'revocation', protect: 'protection', unprotect: 'removal of protection', pr: 'pull request', approve: 'approval', check: 'check result',
+  release: 'release', wiki: 'wiki page', project: 'project', card: 'card on a project',
   review: 'review', 'line-comment': 'comment on a line', resolve: 'resolution of a conversation',
   issue: 'issue', comment: 'comment', 'issue-set': 'change to an issue', label: 'label', 'label-remove': 'removal of a label', milestone: 'milestone' };
 const REQUIRED = { grant: MODE.admin, revoke: MODE.admin, protect: MODE.admin, unprotect: MODE.admin, pr: MODE.read, approve: MODE.write, check: MODE.write,
   // Anyone who can read can open an issue and comment. Triage (labels, milestones, assignees, other people's issues) needs write access.
+  release: MODE.write, wiki: MODE.write, project: MODE.write, card: MODE.write,
   review: MODE.read, 'line-comment': MODE.read, resolve: MODE.write,
   issue: MODE.read, comment: MODE.read, 'issue-set': MODE.write, label: MODE.write, 'label-remove': MODE.write, milestone: MODE.write };
 const ID = /^[0-9a-f]{32}$/;
@@ -33,7 +35,7 @@ const pullKey = (ref, head) => `${ref}\n${head}`;
 // caller must fold again, strictly, once the objects are there.
 export async function fold(records, { strict = false } = {}) {
   const state = { owner: records.length ? records[0].key : null, heads: {}, grants: new Map(), protections: new Map(), pulls: [], checks: new Map(), digest: '', count: records.length, unverified: [],
-    issues: [], labels: new Map(), milestones: [],
+    issues: [], labels: new Map(), milestones: [], releases: [], wiki: new Map(), projects: [],
     // The name each person last signed with. It is what they call themselves, nothing more.
     names: new Map() };
   const pulls = new Map();
@@ -182,6 +184,39 @@ export async function fold(records, { strict = false } = {}) {
       if (!thread || !['1', '0'].includes(record.resolved)) throw new Error('refused: a malformed resolution in the log');
       thread.resolved = record.resolved === '1';
       thread.resolvedBy = { key: record.key, name: record.name };
+    } else if (type === 'release') {
+      const tagOk = typeof record.tag === 'string' && /^[^\s~^:?*[\\]{1,100}$/.test(record.tag) && !record.tag.startsWith('-') && !record.tag.includes('..');
+      if (!ID.test(record.id) || !tagOk || !/^[0-9a-f]{40}$/.test(record.target) || !record.title || record.title.length > 200 || String(record.body).length > TEXT_LIMIT || !['1', '0'].includes(record.prerelease) || !['published', 'removed'].includes(record.state)
+        || state.releases.some((other) => other.id !== record.id && other.tag === record.tag)) throw new Error('refused: a malformed release in the log');
+      const at = Number(record.at) || record.time;
+      const known = state.releases.find((other) => other.id === record.id);
+      if (record.state === 'removed') state.releases = state.releases.filter((other) => other.id !== record.id);
+      else if (known) Object.assign(known, { tag: record.tag, target: record.target, title: record.title, body: String(record.body), prerelease: record.prerelease === '1', edited: at });
+      else state.releases.push({ id: record.id, tag: record.tag, target: record.target, title: record.title, body: String(record.body), prerelease: record.prerelease === '1', author: record.key, name: record.name, time: at });
+    } else if (type === 'wiki') {
+      const page = String(record.page).trim();
+      if (!page || page.length > 100 || /[\n\r/]/.test(page) || String(record.body).length > TEXT_LIMIT || !['saved', 'removed'].includes(record.state)) throw new Error('refused: a malformed wiki page in the log');
+      const at = Number(record.at) || record.time;
+      const known = state.wiki.get(page) || { title: page, body: '', removed: false, revisions: [] };
+      known.body = record.state === 'removed' ? '' : String(record.body);
+      known.removed = record.state === 'removed';
+      known.revisions.push({ key: record.key, name: record.name, time: at, body: known.body, removed: known.removed });
+      state.wiki.set(page, known);
+    } else if (type === 'project') {
+      let columns;
+      try { columns = JSON.parse(String(record.columns)); } catch { columns = null; }
+      if (!ID.test(record.id) || !record.title || record.title.length > 100 || String(record.description).length > 2000 || !['open', 'closed'].includes(record.state)
+        || !Array.isArray(columns) || columns.length > 20 || !columns.every((column) => column && ID.test(column.id) && typeof column.title === 'string' && column.title && column.title.length <= 50) || new Set(columns.map((c) => c.id)).size !== columns.length) throw new Error('refused: a malformed project in the log');
+      const at = Number(record.at) || record.time;
+      const known = state.projects.find((other) => other.id === record.id);
+      const next = { title: record.title, description: String(record.description), state: record.state, columns: columns.map((column) => ({ id: column.id, title: column.title })) };
+      if (known) { Object.assign(known, next); for (const [item, card] of known.cards) if (!next.columns.some((column) => column.id === card.column)) known.cards.delete(item); }
+      else state.projects.push({ id: record.id, number: state.projects.length + 1, ...next, cards: new Map(), author: record.key, name: record.name, time: at });
+    } else if (type === 'card') {
+      const project = state.projects.find((other) => other.id === record.project);
+      const position = Number(record.position);
+      if (!project || !discussed(record.item) || (record.column && !project.columns.some((column) => column.id === record.column)) || !Number.isFinite(position)) throw new Error('refused: a malformed card in the log');
+      if (record.column) project.cards.set(record.item, { column: record.column, position }); else project.cards.delete(record.item);
     } else if (type === 'issue') {
       if (!ID.test(record.id) || issues.has(record.id) || !record.title || record.title.length > 200 || String(record.body).length > TEXT_LIMIT || String(record.name).length > 100) throw new Error('refused: a malformed issue in the log');
       const at = Number(record.at) || record.time;

@@ -45,6 +45,12 @@ export function statement(r) {
   else if (type === 'label') fields = ['holo-git/label/1', r.repo, r.name, r.color, J(r.description), String(r.time), r.key, r.previous];
   else if (type === 'label-remove') fields = ['holo-git/label-remove/1', r.repo, r.name, String(r.time), r.key, r.previous];
   else if (type === 'milestone') fields = ['holo-git/milestone/1', r.repo, r.id, r.title, J(r.description), r.due, r.state, String(r.time), r.key, r.previous];
+  // A release names a commit and describes it. A wiki page is its text; every save is a record, so its history is the log.
+  // A project is a board: its columns travel with it, and a card places an issue or pull request in one of them.
+  else if (type === 'release') fields = ['holo-git/release/1', r.repo, r.id, r.tag, r.target, r.title, J(r.body), r.prerelease, r.state, r.name, String(r.at), String(r.time), r.key, r.previous];
+  else if (type === 'wiki') fields = ['holo-git/wiki/1', r.repo, J(r.page), J(r.body), r.state, r.name, String(r.at), String(r.time), r.key, r.previous];
+  else if (type === 'project') fields = ['holo-git/project/1', r.repo, r.id, r.title, J(r.description), r.state, J(r.columns), r.name, String(r.at), String(r.time), r.key, r.previous];
+  else if (type === 'card') fields = ['holo-git/card/1', r.repo, r.project, r.item, r.column, String(r.position), r.name, String(r.at), String(r.time), r.key, r.previous];
   // A check result that stands on its own, outside any repository's chain: it is bound to the
   // content by its action key, so it means the same wherever it is read.
   // The second form adds the digest of the files the check produced, which other checks' keys rest on.

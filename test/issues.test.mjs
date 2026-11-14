@@ -176,3 +176,49 @@ test('a repository can be renamed and removed in this browser; its signed histor
   await store.renameRepo('renamed', REPO);
   assert.equal((await identity.checkLog(REPO)).valid, true);
 });
+
+test('releases, wiki pages and project boards: written, changed and removed, with their history; malformed ones and a reader are refused', async () => {
+  await on(alice);
+  const head = (await store.getRefs(REPO))['refs/heads/main'];
+  const release = await identity.saveRelease(REPO, { tag: 'v0.1.0', target: head, title: 'First release', body: '## Changes\n\n- A start', name: 'Alice' });
+  await identity.saveRelease(REPO, { tag: 'v0.2.0-rc1', target: head, title: 'Candidate', prerelease: true, name: 'Alice' });
+  await identity.saveRelease(REPO, { id: release, tag: 'v0.1.0', target: head, title: 'First release, corrected', body: 'Notes.', name: 'Alice' });
+  await assert.rejects(identity.saveRelease(REPO, { tag: 'v0.1.0', target: head, title: 'Same tag again', name: 'Alice' }), /malformed release/);
+  await assert.rejects(identity.saveRelease(REPO, { tag: 'has space', target: head, title: 'Bad tag', name: 'Alice' }), /malformed release/);
+  await assert.rejects(identity.saveRelease(REPO, { tag: 'v9', target: 'main', title: 'Not a commit', name: 'Alice' }), /malformed release/);
+
+  await identity.saveWikiPage(REPO, { page: 'Home', body: '# Welcome', name: 'Alice' });
+  await identity.saveWikiPage(REPO, { page: 'Home', body: '# Welcome\n\nSee [[Setup]].', name: 'Alice' });
+  await identity.saveWikiPage(REPO, { page: 'Setup', body: 'Install, then run.', name: 'Alice' });
+  await identity.saveWikiPage(REPO, { page: 'Setup', removed: true, name: 'Alice' });
+  await assert.rejects(identity.saveWikiPage(REPO, { page: 'a/b', body: 'x', name: 'Alice' }), /malformed wiki page/);
+
+  const project = await identity.saveProject(REPO, { title: 'Roadmap', description: 'What is next', name: 'Alice' });
+  let s = await state();
+  const board = s.projects[0];
+  assert.deepEqual([board.number, board.title, board.columns.map((c) => c.title)], [1, 'Roadmap', ['To do', 'In progress', 'Done']]);
+  const [todo, doing] = board.columns;
+  await identity.moveCard(REPO, project, s.issues[0].id, todo.id, 1, 'Alice');
+  await identity.moveCard(REPO, project, s.issues[1].id, todo.id, 2, 'Alice');
+  await identity.moveCard(REPO, project, s.issues[0].id, doing.id, 1, 'Alice');
+  await assert.rejects(identity.moveCard(REPO, project, 'f'.repeat(32), todo.id, 1, 'Alice'), /malformed card/);
+  await assert.rejects(identity.moveCard(REPO, project, s.issues[0].id, 'f'.repeat(32), 1, 'Alice'), /malformed card/);
+  // Dropping a column takes its cards off the board.
+  await identity.saveProject(REPO, { id: project, title: 'Roadmap', columns: [doing, board.columns[2]], name: 'Alice' });
+  await identity.moveCard(REPO, project, s.issues[1].id, '', 0, 'Alice');
+
+  s = await state();
+  assert.deepEqual(s.releases.map((r) => [r.tag, r.title, r.prerelease, r.body]), [['v0.1.0', 'First release, corrected', false, 'Notes.'], ['v0.2.0-rc1', 'Candidate', true, '']]);
+  assert.deepEqual([s.wiki.get('Home').body, s.wiki.get('Home').revisions.length, s.wiki.get('Setup').removed, s.wiki.get('Setup').revisions.length], ['# Welcome\n\nSee [[Setup]].', 2, true, 2]);
+  assert.deepEqual([s.projects[0].columns.map((c) => c.title), [...s.projects[0].cards].map(([item, card]) => [item === s.issues[0].id, card.column === doing.id])], [['In progress', 'Done'], [[true, true]]]);
+  await identity.saveRelease(REPO, { id: release, tag: 'v0.1.0', target: head, title: 'First release, corrected', removed: true, name: 'Alice' });
+  assert.deepEqual((await state()).releases.map((r) => r.tag), ['v0.2.0-rc1']);
+
+  // A reader may do none of this.
+  const log = await store.listRefUpdates(REPO);
+  await on(bob);
+  await store.replaceRefUpdates(REPO, log);
+  await assert.rejects(identity.saveWikiPage(REPO, { page: 'Home', body: 'Bob was here', name: 'Bob' }), /does not count|protected branch/);
+  await assert.rejects(identity.saveProject(REPO, { title: 'Mine', name: 'Bob' }), /does not count|protected branch/);
+  await on(alice);
+});

@@ -159,3 +159,21 @@ export async function commentOnLine(repo, pull, { head = '', path = '', side = '
   return id;
 }
 export const resolveThread = (repo, thread, resolved, name = '') => add(repo, { type: 'resolve', thread, resolved: resolved ? '1' : '0', name: String(name), at: Date.now() });
+
+// Around the code: releases, wiki pages and project boards. All need write access.
+const stamp = (name) => ({ name: String(name || ''), at: Date.now() });
+export async function saveRelease(repo, { id, tag, target, title, body = '', prerelease = false, removed = false, name }) {
+  const release = id || freshId();
+  await add(repo, { type: 'release', id: release, tag: String(tag).trim(), target, title: String(title).replace(/[\n\r]/g, ' ').trim().slice(0, 200), body: String(body), prerelease: prerelease ? '1' : '0', state: removed ? 'removed' : 'published', ...stamp(name) });
+  return release;
+}
+export const saveWikiPage = (repo, { page, body = '', removed = false, name }) => add(repo, { type: 'wiki', page: String(page).trim(), body: String(body), state: removed ? 'removed' : 'saved', ...stamp(name) });
+// columns: [{ id, title }]; a column without an id is new.
+export async function saveProject(repo, { id, title, description = '', state = 'open', columns, name }) {
+  const project = id || freshId();
+  const list = (columns || ['To do', 'In progress', 'Done'].map((text) => ({ title: text }))).map((column) => ({ id: column.id || freshId(), title: String(column.title).trim().slice(0, 50) }));
+  await add(repo, { type: 'project', id: project, title: String(title).replace(/[\n\r]/g, ' ').trim().slice(0, 100), description: String(description).slice(0, 2000), state, columns: JSON.stringify(list), ...stamp(name) });
+  return project;
+}
+// Put an issue or pull request in a column at a position, or with no column take it off the board.
+export const moveCard = (repo, project, item, column, position, name) => add(repo, { type: 'card', project, item, column: column || '', position: Number(position) || 0, ...stamp(name) });
