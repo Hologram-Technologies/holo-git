@@ -276,6 +276,14 @@ test('the command runs a check once per content, in any git checkout', () => {
   assert.equal(out.status, 0, 'reverting to content that passed needs no run');
   assert.match(out.stdout, /2 checks: 0 ran/);
   assert.match(repo.run(['history', '--last', '10']).stdout, /runs avoided: \d+ of 10/);
+  // Five commits. lib changed once, so two distinct inputs; flag went ok, broken, ok, so two as well.
+  assert.match(repo.run(['history', '--last', '10']).stdout, /runs avoided: 6 of 10/);
+  // Definitions that are not committed, against a named ref: measuring changes nothing in the repository.
+  const draft = join(scratch('draft'), 'checks.json');
+  writeFileSync(draft, JSON.stringify({ checks: [{ name: 'readme', run: 'true', inputs: ['README.md'] }] }));
+  out = repo.run(['history', '--last', '10', '--ref', 'main', '--definitions', draft]);
+  assert.match(out.stdout, /readme\s+2 distinct inputs in 5 commits \(60% reusable\)/);
+  assert.equal(git(repo.dir, 'status', '--porcelain'), '');
 });
 
 test('a check that reads a file it did not declare fails, instead of passing and being reused wrongly', () => {

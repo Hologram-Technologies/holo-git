@@ -6,7 +6,10 @@
 //
 //   node scripts/check.mjs run [--all] [--retry] [--strict] [name...]
 //   node scripts/check.mjs keys                    print each check's key for the current commit
-//   node scripts/check.mjs history [--last N]      how much of the last N commits' checking was repeat work
+//   node scripts/check.mjs history [--last N] [--ref REF] [--definitions FILE]
+//                                                  how much of the last N commits' checking was repeat work.
+//                                                  --definitions tries a checks file that is not committed,
+//                                                  so a repository can be measured without changing it.
 //
 // A check runs on the committed content, in a directory holding only its declared inputs (see
 // scripts/lib/execute.mjs). Uncommitted edits are not checked. A check this machine cannot run
@@ -42,6 +45,19 @@ function lookupIn(commit) {
     const [mode, , id] = line.split(/\s+/);
     return { mode: mode.replace(/^0+/, ''), id };
   };
+}
+
+// The same, for many paths with one call to git: replaying history asks about every input of
+// every check at every commit.
+function lookupAllIn(commit, paths) {
+  const found = new Map();
+  for (const entry of git('ls-tree', '-z', commit, '--', ...paths).split('\0')) {
+    if (!entry) continue;
+    const [meta, path] = entry.split('\t');
+    const [mode, , id] = meta.split(/\s+/);
+    found.set(path, { mode: mode.replace(/^0+/, ''), id });
+  }
+  return (path) => found.get(path.replace(/\/+$/, '')) || null;
 }
 
 function definitionsAt(commit) {
@@ -134,16 +150,18 @@ async function keys() {
 
 // Replay history: with today's definitions, how many check runs would the last N commits have
 // needed if every result were reused, against one run of every check per commit?
-async function history(last) {
-  const definitions = definitionsAt('HEAD');
+async function history(last, ref, file) {
+  const definitions = file ? parseChecks(readFileSync(file)) : definitionsAt('HEAD');
   if (!definitions.size) { console.log('no checks defined'); return 0; }
-  const commits = git('rev-list', '--first-parent', `--max-count=${last}`, 'HEAD').split('\n').reverse();
+  const commits = git('rev-list', '--first-parent', `--max-count=${last}`, ref).split('\n').reverse();
   const seen = new Map([...definitions.keys()].map((name) => [name, new Set()]));
   const perCommit = [];
+  const paths = [...new Set([...definitions.values()].flatMap((definition) => definition.inputs))];
   for (const commit of commits) {
     let needed = 0;
+    const lookup = lookupAllIn(commit, paths);
     for (const definition of definitions.values()) {
-      const key = await actionKey(definition, lookupIn(commit));
+      const key = await actionKey(definition, lookup);
       if (!seen.get(definition.name).has(key)) { seen.get(definition.name).add(key); needed += 1; }
     }
     perCommit.push(needed);
@@ -151,7 +169,7 @@ async function history(last) {
   const everyTime = commits.length * definitions.size;
   const withReuse = perCommit.reduce((sum, n) => sum + n, 0);
   console.log(`${commits.length} commits, ${definitions.size} checks (today's definitions applied to each commit)`);
-  for (const [name, set] of seen) console.log(`  ${name.padEnd(12)} ${String(set.size).padStart(3)} distinct inputs in ${commits.length} commits`);
+  for (const [name, set] of seen) console.log(`  ${name.padEnd(14)} ${String(set.size).padStart(4)} distinct inputs in ${commits.length} commits (${Math.round(100 * (commits.length - set.size) / commits.length)}% reusable)`);
   console.log(`  commits needing no check at all: ${perCommit.filter((n) => n === 0).length}`);
   console.log(`  check runs, every check on every commit: ${everyTime}`);
   console.log(`  check runs, reusing results:             ${withReuse}`);
@@ -162,10 +180,10 @@ async function history(last) {
 const [command, ...rest] = process.argv.slice(2);
 const flag = (name) => rest.includes(name);
 const option = (name, fallback) => (rest.includes(name) ? rest[rest.indexOf(name) + 1] : fallback);
-const positional = rest.filter((arg, i) => !arg.startsWith('--') && rest[i - 1] !== '--last');
+const positional = rest.filter((arg, i) => !arg.startsWith('--') && !['--last', '--ref', '--definitions'].includes(rest[i - 1]));
 let code;
 if (command === 'run') code = await run(positional, flag('--all'), flag('--strict'), flag('--retry'));
 else if (command === 'keys') code = await keys();
-else if (command === 'history') code = await history(Number(option('--last', '50')));
-else { console.log('usage: node scripts/check.mjs run [--all] [--strict] [name...] | keys | history [--last N]'); code = 64; }
+else if (command === 'history') code = await history(Number(option('--last', '50')), option('--ref', 'HEAD'), option('--definitions', null));
+else { console.log('usage: node scripts/check.mjs run [--all] [--retry] [--strict] [name...] | keys | history [--last N] [--ref REF] [--definitions FILE]'); code = 64; }
 process.exit(code);

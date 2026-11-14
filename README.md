@@ -215,7 +215,7 @@ The checks do not need holo-git's hosting. They work in an ordinary GitHub repos
 
 What changes: a push or pull request that touches nothing a check reads runs nothing for that check. A pull request brought up to date with its base, where the merged content was already checked, runs nothing. A revert to content that passed runs nothing.
 
-Try it before committing to it: `node scripts/check.mjs history --last 200` in a checkout with a `.holo/checks.json` replays the last 200 commits and reports how many check runs reuse would have avoided. That number, on your repository, is the honest estimate of what this is worth to you.
+Try it before committing to it: `node scripts/check.mjs history --last 200` in a checkout with a `.holo/checks.json` replays the last 200 commits and reports how many check runs reuse would have avoided. That number, on your repository, is the honest estimate of what this is worth to you. To measure a repository without adding anything to it, write the definitions to a file elsewhere and pass `--definitions FILE`; `--ref REF` replays a branch other than the one checked out. The replay follows the main line only, so it does not count repeated pushes inside a pull request, and it applies today's paths to old commits, so it overstates reuse where the layout has since changed.
 
 Limits specific to GitHub:
 
