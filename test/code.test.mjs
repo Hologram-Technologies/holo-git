@@ -49,6 +49,7 @@ test('code: files with their last commit, the rendered README, and a way into fo
   assert.deepEqual(await page.eval("[...document.querySelectorAll('.file-table td.name a')].map((a) => a.textContent)"), ['docs', 'src', 'README.md']);
   await page.waitFor("[...document.querySelectorAll('.file-table td.message')].every((td) => td.textContent)", 'the last commit of each row');
   assert.deepEqual(await page.eval("[...document.querySelectorAll('.file-table td.message')].map((td) => td.textContent)"), ['third', 'third', 'first']);
+  await page.waitFor("!!document.querySelector('.readme .markdown h1')", 'the README');
   assert.equal(await page.text('.readme .markdown h1'), 'Fixture');
   await page.waitFor(`document.querySelector('[data-commits]').textContent === ${JSON.stringify(S.code.commitCount(3))}`, 'the commit count');
   assert.equal(await page.eval("document.querySelector('#main nav.tabs a[aria-current=page]').textContent"), S.repo.code);

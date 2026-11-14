@@ -10,7 +10,11 @@ import { getRepo, getRefs } from '../store.js';
 export const slug = (text) => String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'you';
 // Repositories are stored by name alone. The owner shown in an address is where the repository came
 // from: for one opened by address, the path segment before its name; for one made here, its maker.
-export function ownerOf(repo) {
+// First path segments the app or its files already use. An owner with one of these names gets a suffix, so its addresses cannot be mistaken for them.
+const RESERVED = new Set(['new', 'open', 'settings', 'welcome', 'fixtures', 'ui', 'issues', 'pulls', 'explore', 'notifications', 'search', 'organizations']);
+const free = (name) => (RESERVED.has(name) ? `${name}-1` : name);
+export function ownerOf(repo) { return free(rawOwner(repo)); }
+function rawOwner(repo) {
   if (repo.owner) return repo.owner;
   if (repo.url) {
     try {
@@ -34,14 +38,19 @@ export function show(kind, ...children) {
   node.replaceChildren(...children.flat(Infinity).filter(Boolean));
 }
 
+// Each repository screen that starts ends the background reading of the one before. `alive()` is false once a newer screen has begun.
+let screen = 0;
+function begin() { screen += 1; const mine = screen; return () => mine === screen; }
+
 // The repository an address names, or null after drawing the reason there is none.
 // An address from before owners existed ('/name/tree/main') is sent on to its new form.
 export async function load(params) {
+  const alive = begin();
   const repo = await getRepo(params.repo);
   if (repo && ownerOf(repo) === params.owner) {
     const refs = await getRefs(repo.name);
     const names = (prefix) => Object.keys(refs).filter((ref) => ref.startsWith(prefix)).map((ref) => ref.slice(prefix.length)).sort();
-    return { repo, refs, branches: names('refs/heads/'), tags: names('refs/tags/'), head: defaultBranch(repo) };
+    return { repo, refs, branches: names('refs/heads/'), tags: names('refs/tags/'), head: defaultBranch(repo), alive };
   }
   // Not awaited: the router draws one screen at a time, and this one is still being drawn.
   if (repo) { navigate(`${repoPath(repo)}${params.rest ? `/${params.rest}` : ''}`, { replace: true }); return null; }

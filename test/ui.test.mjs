@@ -126,6 +126,7 @@ test('new repository: created with a first commit and listed on home; a bad or t
   await page.fill(await page.field(S.newRepo.description), 'A first repository');
   await page.click('button', S.newRepo.create);
   await page.arrive('/ada-example/hello-world');
+  await page.waitFor("!!document.querySelector('.readme .markdown h1')", 'the README');
   assert.match(await page.text(), /README\.md/);
   assert.match(await page.text(), /A first repository/);
   assert.match(await page.text(), new RegExp(S.newRepo.initial));
@@ -164,6 +165,7 @@ test('open repository: a repository served as files is copied in; a bad or dead 
   await page.fill(address, `${remote.url}fixture.git`);
   await page.click('button', S.openRepo.open);
   await page.arrive('/127-0-0-1/fixture');
+  await page.waitFor("!!document.querySelector('.readme .markdown h1')", 'the README');
   assert.match(await page.text(), /docs/);
   assert.match(await page.text(), /A repository for tests\./);
   noErrors(page);

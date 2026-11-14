@@ -27,23 +27,33 @@ export async function commitAt(context, at, tab = 'code') {
 }
 
 // Every file under a tree, as paths. Stops at `limit`.
-async function listFiles(treeId, prefix = '', out = [], limit = 5000) {
+async function listFiles(treeId, prefix = '', out = [], limit = 5000, alive = () => true) {
   for (const entry of await readTree(treeId)) {
-    if (out.length >= limit) break;
-    if (isDir(entry)) await listFiles(entry.id, `${prefix}${entry.name}/`, out, limit);
+    if (out.length >= limit || !alive()) break;
+    if (isDir(entry)) await listFiles(entry.id, `${prefix}${entry.name}/`, out, limit, alive);
     else if (entry.mode !== '160000') out.push({ path: prefix + entry.name, id: entry.id });
   }
   return out;
 }
 
+// Results that depend only on content are kept for the session, keyed by the identifier of that content.
+// A result cut short because the visitor moved on is not kept.
+const fileCache = new Map(); const languageCache = new Map(); const changeCache = new Map();
+async function remembered(cache, key, alive, make) {
+  if (cache.has(key)) return cache.get(key);
+  const value = await make();
+  if (alive() && value) cache.set(key, value);
+  return value;
+}
+
 // For each entry of a directory, the newest commit on the first-parent line that changed it.
-async function lastChanges(startId, path, names, limit = 300) {
+async function lastChanges(startId, path, names, alive, limit = 300) {
   const found = new Map();
   const entriesAt = async (commit) => { try { const node = path ? await lookup(commit.tree, path) : { kind: 'tree', id: commit.tree }; return node.kind === 'tree' ? new Map((await readTree(node.id)).map((e) => [e.name, e.id])) : new Map(); } catch { return new Map(); } };
   let id = startId;
   let commit = parseCommit(await getObject(id));
   let here = await entriesAt(commit);
-  for (let walked = 0; id && found.size < names.length && walked < limit; walked += 1) {
+  for (let walked = 0; id && found.size < names.length && walked < limit && alive(); walked += 1) {
     const parentId = commit.parents[0];
     const parent = parentId ? parseCommit(await getObject(parentId)) : null;
     const before = parent ? await entriesAt(parent) : new Map();
@@ -54,10 +64,11 @@ async function lastChanges(startId, path, names, limit = 300) {
 }
 
 const LANGUAGES = { js: 'JavaScript', mjs: 'JavaScript', ts: 'TypeScript', rs: 'Rust', py: 'Python', go: 'Go', html: 'HTML', css: 'CSS', sh: 'Shell', lean: 'Lean', java: 'Java', c: 'C', h: 'C', cpp: 'C++', rb: 'Ruby', php: 'PHP', swift: 'Swift', kt: 'Kotlin', cs: 'C#', vue: 'Vue', lua: 'Lua' };
-async function languages(files) {
+async function languages(files, alive) {
   if (files.length > 400) return null;
   const bytes = new Map();
   for (const file of files) {
+    if (!alive()) return null;
     const name = LANGUAGES[extension(file.path)];
     if (name) bytes.set(name, (bytes.get(name) || 0) + open(await getObject(file.id)).content.length);
   }
@@ -150,12 +161,13 @@ export async function tree(context, at) {
   });
   const table = fileTable(rows);
   if (at.path) table.tBodies[0].prepend(el('tr', {}, el('td', { class: 'name', colspan: '3' }, el('a', { href: repoHref(context.repo, 'tree', at.ref, at.path.split('/').slice(0, -1).join('/')), 'aria-label': S.code.parent }, '..'))));
-  // The table is on screen first; who last changed each row arrives after.
-  lastChanges(id, at.path, entries.map((entry) => entry.name)).then((found) => {
+  // The screen is drawn first. Everything slow is listed here and started once it is on screen.
+  const later = [];
+  later.push(() => remembered(changeCache, `${id}:${at.path}`, context.alive, () => lastChanges(id, at.path, entries.map((entry) => entry.name), context.alive)).then((found) => {
     for (const [name, change] of found) { const cell = cells.get(name); cell.message.replaceChildren(el('a', { href: repoHref(context.repo, 'commit', change.id) }, subject(change.commit.message))); cell.when.replaceChildren(relativeTime(person(change.commit.author).time)); }
-  });
+  }));
 
-  const files = () => listFiles(commit.tree);
+  const files = () => remembered(fileCache, commit.tree, context.alive, () => listFiles(commit.tree, '', [], 5000, context.alive));
   const canWrite = at.kind === 'branch';
   const toolbar = el('div', { class: 'row code-bar' }, refSwitcher(context, at, 'tree'), at.path ? pathCrumbs(context, at) : el('a', { class: 'btn btn-invisible', href: repoHref(context.repo, 'branches') }, icon('git-branch'), S.code.branchCount(context.branches.length)),
     !at.path && context.tags.length ? el('a', { class: 'btn btn-invisible', href: repoHref(context.repo, 'tags') }, icon('tag'), S.code.tagCount(context.tags.length)) : '',
@@ -165,22 +177,24 @@ export async function tree(context, at) {
   const parts = [toolbar, box({ head: latestCommit(context, at, id, commit), rows: table })];
   const readme = entries.find((entry) => !isDir(entry) && /^readme(\.(md|markdown|txt))?$/i.test(entry.name));
   if (readme) {
-    const content = decode(open(await getObject(readme.id)).content);
+    const holder = el('div', { class: 'readme-body' });
+    later.push(async () => { const content = decode(open(await getObject(readme.id)).content); holder.replaceChildren(MARKDOWN.test(readme.name) ? renderMarkdown(content, documentLinks(context, at, at.path)) : el('pre', { class: 'plain' }, content)); });
     parts.push(box({ class: 'readme', head: [icon('book'), el('strong', {}, readme.name), el('span', { class: 'spacer' }), canWrite ? button({ label: S.code.editFile, icon: 'pencil', iconOnly: true, kind: 'invisible', size: 'small', href: repoHref(context.repo, 'edit', at.ref, prefix + readme.name) }) : ''],
-      body: MARKDOWN.test(readme.name) ? renderMarkdown(content, documentLinks(context, at, at.path)) : el('pre', { class: 'plain' }, content) }));
+      body: holder }));
   }
   let body = el('div', { class: 'stack' }, parts);
   if (!at.path) {
     const search = el('form', { role: 'search', onsubmit: (event) => { event.preventDefault(); const q = event.currentTarget.elements.q.value.trim(); if (q) navigate(`${repoPath(context.repo, 'search')}?q=${encodeURIComponent(q)}`); } }, textInput({ type: 'search', name: 'q', placeholder: S.code.searchCode, 'aria-label': S.code.searchCode }));
     const langs = el('div', {});
-    files().then(languages).then((list) => {
+    later.push(() => files().then((all) => remembered(languageCache, commit.tree, context.alive, () => languages(all, context.alive))).then((list) => {
       if (!list) return;
       langs.replaceChildren(el('h2', {}, S.code.languages), el('div', { class: 'lang-bar', role: 'img', 'aria-label': list.map((l) => `${l.name} ${(l.share * 100).toFixed(1)}%`).join(', ') }, list.map((l, i) => { const part = el('i', { class: `c${i}` }); part.style.setProperty('flex-grow', String(l.share)); return part; })),
         el('ul', { class: 'lang-list' }, list.map((l, i) => el('li', {}, el('i', { class: `c${i}` }), el('strong', {}, l.name), el('span', { class: 'muted' }, `${(l.share * 100).toFixed(1)}%`)))));
-    });
+    }));
     body = el('div', { class: 'columns' }, body, el('aside', { class: 'stack side' }, search, el('div', {}, el('h2', {}, S.code.about), el('p', { class: context.repo.description ? '' : 'muted' }, context.repo.description || S.code.noDescription)), langs));
   }
   show('wide', repoHeader(context, 'code'), el('div', { class: 'page' }, body));
+  setTimeout(() => later.forEach((run) => run().catch(() => {})), 0);
   return { title: at.path ? `${at.path} ${S.code.at} ${at.ref} · ${context.repo.name}` : context.repo.name, repo: context.repo,
     keys: [{ keys: 't', label: S.code.goToFile, run: () => document.querySelector('[data-finder]').focus() }, { keys: 'w', label: S.code.switchTitle, run: () => { const d = document.querySelector('#main details.menu'); d.open = true; d.querySelector('a').focus(); } }] };
 }
