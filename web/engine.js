@@ -54,6 +54,45 @@ export const labelOf = (envelope) => hex(call('eng_label', envelope));
 export const parseCommit = (envelope) => JSON.parse(text.decode(call('eng_commit', envelope)));
 export const parseTree = (envelope) => JSON.parse(text.decode(call('eng_tree', envelope)));
 
+function pack(buffers) {
+  const total = buffers.reduce((sum, b) => sum + b.length, 0);
+  const out = new Uint8Array(4 + 4 * buffers.length + total);
+  const view = new DataView(out.buffer);
+  view.setUint32(0, buffers.length, true);
+  let at = 4 + 4 * buffers.length;
+  buffers.forEach((buffer, i) => {
+    view.setUint32(4 + 4 * i, buffer.length, true);
+    out.set(buffer, at);
+    at += buffer.length;
+  });
+  return out;
+}
+
+// Runs of lines that turn `before` into `after`: [{ op: 'equal' | 'delete' | 'insert', count }].
+export function diffLines(before, after) {
+  const out = call('eng_diff', pack([before, after]));
+  const view = new DataView(out.buffer);
+  const runs = [];
+  for (let at = 0; at < out.length; at += 5) runs.push({ op: ['equal', 'delete', 'insert'][out[at]], count: view.getUint32(at + 1, true) });
+  return runs;
+}
+
+// Versions newest first -> for each line of the newest, the index of the oldest version that had it.
+export function blameLines(versions) {
+  const out = call('eng_blame', pack(versions));
+  const view = new DataView(out.buffer);
+  return Array.from({ length: out.length / 4 }, (_, i) => view.getUint32(4 * i, true));
+}
+
+// Lines keep the engine's meaning: split after each newline.
+export function splitLines(bytes) {
+  const lines = [];
+  let start = 0;
+  for (let i = 0; i < bytes.length; i += 1) if (bytes[i] === 10) { lines.push(bytes.subarray(start, i + 1)); start = i + 1; }
+  if (start < bytes.length) lines.push(bytes.subarray(start));
+  return lines;
+}
+
 export function open(envelope) {
   const nul = envelope.indexOf(0);
   const kind = text.decode(envelope.subarray(0, nul)).split(' ')[0];

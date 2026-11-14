@@ -35,7 +35,7 @@ On the development machine the full local build timed out and then took the cont
 
 ## The browser read path
 
-`engine/` is the git engine in Rust: object hashing, packfile reading, delta resolution, commit and tree parsing. It compiles to 67 KB of WebAssembly with no imports. `web/` is the page.
+`engine/` is the git engine in Rust: object hashing, packfile reading, delta resolution, commit and tree parsing, line diff and blame. It compiles to 77 KB of WebAssembly with no imports. `web/` is the page.
 
 What works, tested in a browser:
 
@@ -43,11 +43,19 @@ What works, tested in a browser:
 - Every object's identifier is computed from its bytes; nothing is taken from the replica's index.
 - Objects are stored on the device under kappa labels (`sha1:<id>`) as loose-object bytes, the form a kappa peer stores.
 - Every read re-derives the label. Altered bytes are refused.
-- Browse files, view a file, list history, and see which paths a commit changed.
+- Browse files, view a file, list history.
+- Line diffs on each commit, with context, computed by a minimal Myers diff in the engine.
+- Blame for any file, following the first-parent line. Commits that left the file's label unchanged are skipped without reading it.
 
-What is tested: five engine tests compare every object in a real packfile with `git cat-file`, byte for byte, and check that damaged packs are refused. The page was exercised by hand against a replica of this repository (120 objects, matching git's count).
+What is tested: eight engine tests run against git itself.
 
-Not done yet: line diffs, blame, markdown rendering, a service worker, partial clone, and large repositories (a pack is held in memory whole). The page does not yet call the proved kernel; label checks run in the engine. Storage is IndexedDB, not the file store the architecture proposes.
+- Every object in a real packfile matches `git cat-file`, byte for byte, and damaged packs are refused.
+- 66 diff cases rebuild the new file exactly and are as short as `git diff --minimal`.
+- Blame names the same commit as `git blame` on every line of a 25-commit history.
+
+The page was exercised by hand against a replica of this repository: the object count matches git, the added and removed line counts match `git show --numstat` for 27 files in three commits, and the README's blame matches `git blame`.
+
+Not done yet: rename detection (a rename shows as a removal and an addition), blame through merges, markdown rendering, a service worker, partial clone, and large repositories (a pack is held in memory whole). Diffs with more than 2,000 differing lines fall back to a full replacement. The page does not yet call the proved kernel; label checks run in the engine. Storage is IndexedDB, not the file store the architecture proposes. The page has no automated tests.
 
 ```bash
 (cd engine && cargo test --release)

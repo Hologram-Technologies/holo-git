@@ -1,8 +1,8 @@
 // The page. Repository content is only ever placed with textContent, never parsed as HTML.
 
-import { loadEngine, open } from './engine.js';
+import { loadEngine, open, diffLines, blameLines, splitLines } from './engine.js';
 import { openStore, getObject, getRepo, getRefs, listRepos, countObjects, stats, corruptObject } from './store.js';
-import { clone, resolveCommit, readTree, lookup, history, changedPaths, person } from './git.js';
+import { clone, resolveCommit, readTree, lookup, history, changedPaths, person, fileVersions } from './git.js';
 
 const main = document.getElementById('main');
 const status = document.getElementById('status');
@@ -118,7 +118,7 @@ async function blob(repo, refs, ref, path) {
   if (node.kind === 'tree') return tree(repo, refs, ref, path);
   const { content } = open(await getObject(node.id));
   main.replaceChildren(header(repo, refs, ref, 'code'), crumbs(repo, ref, path, 'blob'),
-    el('p', { class: 'muted mono' }, `sha1:${node.id} · ${content.length} bytes`), blobView(content));
+    el('p', { class: 'muted mono' }, `sha1:${node.id} · ${content.length} bytes · `, link(`#/${repo.name}/blame/${enc(ref)}/${path}`, 'Blame')), blobView(content));
 }
 
 async function commits(repo, refs, ref) {
@@ -135,12 +135,85 @@ async function commits(repo, refs, ref) {
     })));
 }
 
+const isBinary = (bytes) => bytes.subarray(0, 8000).includes(0);
+const shown = (line) => text.decode(line).replace(/\r?\n$/, '');
+const MAX_DIFF_LINES = 3000;
+
+// A unified view of one file's change, with three lines of context around each change.
+async function fileDiff(change, oldTree, newTree) {
+  const read = async (tree) => {
+    if (!tree) return new Uint8Array();
+    try { return open(await getObject((await lookup(tree, change.path)).id)).content; } catch { return new Uint8Array(); }
+  };
+  const before = change.status === 'added' ? new Uint8Array() : await read(oldTree);
+  const after = change.status === 'removed' ? new Uint8Array() : await read(newTree);
+  if (isBinary(before) || isBinary(after)) return el('p', { class: 'muted' }, 'Binary file.');
+  const oldLines = splitLines(before);
+  const newLines = splitLines(after);
+  if (oldLines.length + newLines.length > MAX_DIFF_LINES) return el('p', { class: 'muted' }, `Large change (${oldLines.length} lines before, ${newLines.length} after) not shown.`);
+  const rows = [];
+  let i = 0;
+  let j = 0;
+  for (const run of diffLines(before, after)) {
+    for (let n = 0; n < run.count; n += 1) {
+      if (run.op === 'equal') { rows.push({ op: ' ', a: i + 1, b: j + 1, line: newLines[j] }); i += 1; j += 1; }
+      else if (run.op === 'delete') { rows.push({ op: '-', a: i + 1, b: '', line: oldLines[i] }); i += 1; }
+      else { rows.push({ op: '+', a: '', b: j + 1, line: newLines[j] }); j += 1; }
+    }
+  }
+  const keep = new Uint8Array(rows.length);
+  rows.forEach((row, at) => { if (row.op !== ' ') for (let k = Math.max(0, at - 3); k <= Math.min(rows.length - 1, at + 3); k += 1) keep[k] = 1; });
+  const out = [];
+  let gap = false;
+  rows.forEach((row, at) => {
+    if (!keep[at]) { gap = true; return; }
+    if (gap && out.length) out.push(el('tr', { class: 'gap' }, el('td', { colspan: '4' }, '⋯')));
+    gap = false;
+    out.push(el('tr', { class: row.op === '+' ? 'add' : row.op === '-' ? 'del' : '' },
+      el('td', { class: 'n' }, row.a), el('td', { class: 'n' }, row.b), el('td', { class: 'sign' }, row.op), el('td', {}, el('pre', {}, shown(row.line)))));
+  });
+  const added = rows.filter((row) => row.op === '+').length;
+  const removed = rows.filter((row) => row.op === '-').length;
+  return el('div', {}, el('p', { class: 'muted mono counts' }, el('span', { class: 'st added' }, `+${added}`), ' ', el('span', { class: 'st removed' }, `-${removed}`)),
+    el('table', { class: 'code diff' }, out));
+}
+
+async function blamePage(repo, refs, ref, path) {
+  const { id } = await resolveCommit(refs, ref);
+  const { versions, walked, complete } = await fileVersions(id, path);
+  if (!versions.length) throw new Error(`${path}: no such file`);
+  const contents = [];
+  for (const version of versions) contents.push(open(await getObject(version.blob)).content);
+  if (isBinary(contents[0])) throw new Error(`${path} is a binary file.`);
+  const owners = blameLines(contents);
+  const lines = splitLines(contents[0]);
+  const rows = lines.map((line, at) => {
+    const version = versions[owners[at]];
+    const first = at === 0 || owners[at - 1] !== owners[at];
+    const author = person(version.commit.author);
+    return el('tr', { class: first ? 'first' : '' },
+      el('td', { class: 'who' }, first ? [link(`#/${repo.name}/commit/${version.id}`, short(version.id)), ` ${author.name} · ${when(author.time)}`] : ''),
+      el('td', { class: 'n' }, at + 1), el('td', {}, el('pre', {}, shown(line))));
+  });
+  main.replaceChildren(header(repo, refs, ref, 'code'), crumbs(repo, ref, path, 'blob'),
+    el('p', { class: 'muted' }, `${versions.length} version${versions.length === 1 ? '' : 's'} across ${walked} commits on the first-parent line`,
+      complete ? '' : ' (older history not examined)', ' · ', link(`#/${repo.name}/blob/${enc(ref)}/${path}`, 'Normal view')),
+    el('table', { class: 'code blame' }, rows));
+}
+
 async function commitPage(repo, refs, id) {
   const { commit } = await resolveCommit(refs, id);
   const author = person(commit.author);
   const parentTree = commit.parents.length ? (await resolveCommit(refs, commit.parents[0])).commit.tree : null;
   const changes = await changedPaths(parentTree, commit.tree);
   const ref = repo.head.replace('refs/heads/', '');
+  const sections = [];
+  for (const change of changes) {
+    sections.push(el('section', { class: 'file' },
+      el('h3', {}, el('span', { class: `st ${change.status}` }, change.status), ' ',
+        change.status === 'removed' ? change.path : link(`#/${repo.name}/blob/${id}/${change.path}`, change.path)),
+      await fileDiff(change, parentTree, commit.tree)));
+  }
   main.replaceChildren(header(repo, refs, ref, 'commits'),
     el('h2', {}, subject(commit.message)),
     el('pre', { class: 'readme' }, commit.message.split('\n').slice(1).join('\n').trim()),
@@ -148,9 +221,7 @@ async function commitPage(repo, refs, id) {
     el('p', { class: 'mono muted' }, `commit sha1:${id}`, el('br'), 'tree ', link(`#/${repo.name}/tree/${id}`, short(commit.tree)),
       commit.parents.map((parent) => [' · parent ', link(`#/${repo.name}/commit/${parent}`, short(parent))])),
     el('h2', {}, `${changes.length} changed file${changes.length === 1 ? '' : 's'}`),
-    el('table', { class: 'files' }, changes.map((change) => el('tr', {},
-      el('td', { class: `st ${change.status}` }, change.status),
-      el('td', {}, change.status === 'removed' ? change.path : link(`#/${repo.name}/blob/${id}/${change.path}`, change.path))))));
+    ...sections);
 }
 
 async function route() {
@@ -166,6 +237,7 @@ async function route() {
       if (view === 'blob') await blob(repo, refs, target, path);
       else if (view === 'commits') await commits(repo, refs, target);
       else if (view === 'commit') await commitPage(repo, refs, target);
+      else if (view === 'blame') await blamePage(repo, refs, target, path);
       else await tree(repo, refs, target, path);
     }
   } catch (error) {

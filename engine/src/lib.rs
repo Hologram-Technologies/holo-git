@@ -4,6 +4,7 @@
 //! object's bytes. Nothing is taken on trust from the source of the bytes.
 
 pub mod abi;
+pub mod diff;
 pub mod object;
 pub mod pack;
 

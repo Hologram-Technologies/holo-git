@@ -3,6 +3,7 @@
 //! Every call returns a pointer to `[status: u32 LE][length: u32 LE][payload]`.
 //! Status 0 is success. The host frees it with `eng_free(pointer, 8 + length)`.
 
+use crate::diff::{blame, diff};
 use crate::object::{commit_json, inflate_loose, open_envelope, tree_json};
 use crate::pack::read_pack;
 use crate::{envelope_header, sha1, Error};
@@ -112,6 +113,53 @@ pub unsafe extern "C" fn eng_label(pointer: *const u8, length: usize) -> *mut u8
 #[no_mangle]
 pub unsafe extern "C" fn eng_commit(pointer: *const u8, length: usize) -> *mut u8 {
     reply(open_envelope(input(pointer, length)).and_then(|(_, content)| commit_json(content)).map(String::into_bytes))
+}
+
+/// `[count: u32 LE][length: u32 LE] * count [bytes...]` -> the buffers, in order.
+fn buffers(input: &[u8]) -> Result<Vec<&[u8]>, Error> {
+    let word = |at: usize| -> Result<usize, Error> {
+        let bytes: [u8; 4] = input.get(at..at + 4).ok_or(Error::Truncated)?.try_into().unwrap();
+        Ok(u32::from_le_bytes(bytes) as usize)
+    };
+    let count = word(0)?;
+    let mut at = count.checked_mul(4).and_then(|n| n.checked_add(4)).ok_or(Error::Truncated)?;
+    let mut out = Vec::with_capacity(count.min(1 << 16));
+    for index in 0..count {
+        let length = word(4 + 4 * index)?;
+        let end = at.checked_add(length).ok_or(Error::Truncated)?;
+        out.push(input.get(at..end).ok_or(Error::Truncated)?);
+        at = end;
+    }
+    Ok(out)
+}
+
+/// Two buffers (old, new) in; runs `[op: u8][count: u32 LE]` out. Op 0 equal, 1 delete, 2 insert.
+///
+/// # Safety
+/// `pointer..pointer+length` must be readable.
+#[no_mangle]
+pub unsafe extern "C" fn eng_diff(pointer: *const u8, length: usize) -> *mut u8 {
+    reply(buffers(input(pointer, length)).and_then(|parts| {
+        if parts.len() != 2 {
+            return Err(Error::Truncated);
+        }
+        let mut out = Vec::new();
+        for (op, count) in diff(parts[0], parts[1]) {
+            out.push(op as u8);
+            out.extend_from_slice(&count.to_le_bytes());
+        }
+        Ok(out)
+    }))
+}
+
+/// Versions of one file, newest first, in; for each line of the newest, the index (u32 LE)
+/// of the oldest version that already had it.
+///
+/// # Safety
+/// `pointer..pointer+length` must be readable.
+#[no_mangle]
+pub unsafe extern "C" fn eng_blame(pointer: *const u8, length: usize) -> *mut u8 {
+    reply(buffers(input(pointer, length)).map(|parts| blame(&parts).into_iter().flat_map(u32::to_le_bytes).collect()))
 }
 
 /// Tree envelope in; JSON out.

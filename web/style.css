@@ -40,3 +40,13 @@ input { flex: 1 1 280px; padding: 8px 10px; border: 1px solid var(--line); borde
 button { padding: 8px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); font: inherit; cursor: pointer; }
 .error, .status.refused { color: var(--removed); }
 .status { max-width: 1040px; margin: 24px auto; padding: 0 16px; color: var(--muted); font-size: 13px; }
+h3 { font-size: 14px; font-weight: 600; margin: 20px 0 6px; overflow-wrap: anywhere; }
+h3 .st { display: inline-block; width: auto; margin-right: 4px; }
+.counts { margin: 0 0 4px; }
+.diff .sign { width: 1%; padding: 0 4px; color: var(--muted); font: 13px ui-monospace, Consolas, monospace; user-select: none; }
+.diff tr.add { background: color-mix(in srgb, var(--added) 14%, transparent); }
+.diff tr.del { background: color-mix(in srgb, var(--removed) 14%, transparent); }
+.diff tr.gap td { text-align: center; color: var(--muted); background: var(--panel); }
+.blame .who { white-space: nowrap; color: var(--muted); font-size: 12px; width: 1%; padding-right: 12px; }
+.blame tr.first td { border-top: 1px solid var(--line); }
+.blame tr:first-child td { border-top: 0; }

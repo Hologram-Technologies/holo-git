@@ -148,3 +148,26 @@ export async function changedPaths(oldTree, newTree, prefix = '', out = []) {
   }
   return out;
 }
+
+// The versions of one path along the first-parent line, newest first. Commits that left the
+// file's identifier unchanged are skipped without reading the file: equal labels, equal bytes.
+// Each entry names the oldest commit that had that version, which is the one that wrote it.
+export async function fileVersions(startId, path, limit = 200) {
+  const versions = [];
+  let id = startId;
+  let walked = 0;
+  while (id && versions.length < limit) {
+    const commit = parseCommit(await getObject(id));
+    let blob = null;
+    try {
+      const node = await lookup(commit.tree, path);
+      if (node.kind === 'blob') blob = node.id;
+    } catch { /* the path does not exist in this commit */ }
+    if (!blob) break;
+    const last = versions[versions.length - 1];
+    if (last && last.blob === blob) { last.id = id; last.commit = commit; } else versions.push({ id, commit, blob });
+    id = commit.parents[0];
+    walked += 1;
+  }
+  return { versions, walked, complete: !id || versions.length < limit };
+}
