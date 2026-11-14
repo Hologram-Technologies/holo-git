@@ -14,6 +14,7 @@ These are waits measured in this project, not estimates. They are the problem in
 | Settling axiom lists | One full verification per wrong list | The verifier reports one mismatch per run; one change took six runs |
 | Page deploy checks | About a minute | Engine and page tests all run again for a README change |
 | Finding the right build | One failed attempt | The build tool picked up another workflow's run for the same commit |
+| This repository's CI, before reuse | About 1 to 4 minutes on every push | Every check ran whatever the push changed |
 | Three kernel builds for three small rule changes | About 30 minutes in all | Each rebuilt every module; each change touched one or two |
 
 None of these waits is the first time a piece of work is done. Every one is work being done again, or a queue.
