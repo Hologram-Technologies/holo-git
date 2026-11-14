@@ -346,6 +346,39 @@ What to know:
 - **The merge gate in the browser does not follow outputs yet.** There, a required check that uses another cannot be satisfied. This works today in a git checkout and through the GitHub action.
 - **Products made before a store was named are not uploaded later.** They are shared when they are made.
 
+## A gate that keeps what passed
+
+Measured on a larger project: a full gate cost about 21 machine-hours an attempt and passed one time in nine. Each failed attempt threw away every leg that had passed. Here a result belongs to content, not to a run, so a failed attempt leaves its passes behind.
+
+- **A failed or cancelled run keeps its results.** The action saves them whatever the outcome. The next attempt runs the check that failed and whatever its fix touched, and nothing else.
+- **A re-run retries only the failures.** "Re-run jobs" on the same commit is someone saying a failure was not the content's fault. Stored failures run again; stored passes stand. Set `retry: 'false'` to turn that off.
+- **In the gate, do not stop at the first failure.** `fail-fast` belongs before the push, where one answer is enough. In the gate, leave it off, so one attempt reports every failure and keeps every pass.
+- **The last line says what reuse spared**: how long the reused results took when they were made.
+
+For a gate split over many parallel jobs, give each job its leg and name a shared store:
+
+```yaml
+strategy:
+  fail-fast: false
+  matrix:
+    leg: [unit, integration, docs]
+steps:
+  - uses: actions/checkout@v4
+  - uses: humuhumu33/holo-git/.github/actions/checks@<commit>
+    with:
+      checks: ${{ matrix.leg }}
+      store: https://store.example/results-bucket
+      signers-ref: origin/main
+```
+
+What to know:
+
+- **Without a store, parallel jobs share results poorly.** GitHub's cache restores one saved set per job: this leg's most recent, or failing that the most recent of any leg. Each leg reliably finds its own earlier results, not the others'. With a store every result is its own object and every job sees all of them.
+- **A stored failure is believed until someone says otherwise.** A new run on the same content does not retry it; a re-run does. A failure caused by the machine and not the content still looks the same to the cache.
+- **A check cut off by a cancellation leaves no result.** Checks that had finished are kept.
+- **GitHub scopes its cache by branch.** A pull request's later runs see its earlier ones and the base branch's, not another pull request's.
+- **This cannot make a wrong change pass.** It makes each attempt cost what changed, not the whole gate.
+
 ## Self-hosting: what has been done, and what has not
 
 On 2026-11-14 this repository was developed through itself for three changes, on one machine.

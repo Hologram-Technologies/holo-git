@@ -270,6 +270,7 @@ async function run(names, { all = false, strict = false, retry = false, failFast
   let ran = 0;
   let reused = 0;
   let skipped = 0;
+  let spared = 0; // seconds the reused results took when they were made
   const started = Date.now();
   const cannot = (name, why) => {
     console.log(`${name}: cannot run here: ${why}`);
@@ -374,6 +375,7 @@ async function run(names, { all = false, strict = false, retry = false, failFast
       // A result made here before the store was named is shared now.
       else if (share && known.signed && known.signed.key === share.me.id && !(await share.store.has(entry.key, share.me.id))) await publish(share, name, known.signed);
       reused += 1;
+      spared += Number(known.seconds) || 0;
       if (known.result !== 'pass') failed += 1;
       entry.status = 'done';
       entry.record = known;
@@ -388,7 +390,7 @@ async function run(names, { all = false, strict = false, retry = false, failFast
   }
   const left = [...entries.values()].filter((entry) => entry.status === 'ready' || entry.status === 'waiting').map(({ name }) => name);
   if (left.length) console.log(`not run after the first failure: ${left.join(', ')}`);
-  console.log(`${wanted.length} check${wanted.length === 1 ? '' : 's'}: ${ran} ran, ${reused} reused, ${skipped} skipped, ${failed} failing${left.length ? `, ${left.length} not run` : ''}, ${Math.round((Date.now() - started) / 100) / 10}s`);
+  console.log(`${wanted.length} check${wanted.length === 1 ? '' : 's'}: ${ran} ran, ${reused} reused, ${skipped} skipped, ${failed} failing${left.length ? `, ${left.length} not run` : ''}, ${Math.round((Date.now() - started) / 100) / 10}s${reused ? `; the reused results took ${Math.round(spared)}s when they were made` : ''}`);
   return failed ? 1 : 0;
 }
 

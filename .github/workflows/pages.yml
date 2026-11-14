@@ -51,7 +51,7 @@ jobs:
       - name: Run the checks that have no result
         uses: ./.github/actions/checks
         with:
-          cache: 'false'
+          cache: 'save'
       - name: Build the page
         run: |
           sh scripts/build-web.sh | tee build.log

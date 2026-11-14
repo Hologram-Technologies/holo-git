@@ -17,8 +17,11 @@ inputs:
     description: "'true' fails the job when a check cannot run on this machine. 'false' skips it."
     default: 'true'
   cache:
-    description: "'false' when an earlier step in the same job already restored the results."
+    description: "'true' restores earlier results and saves the new ones. 'save' only saves, for when an earlier step in the same job restored them. 'false' does neither."
     default: 'true'
+  retry:
+    description: "'auto' runs failed checks again when the run is a re-run, keeping every pass. 'true' always does, 'false' never."
+    default: 'auto'
   fail-fast:
     description: "'true' stops at the first failing check. The checks left are listed as not run."
     default: 'false'
@@ -37,17 +40,22 @@ outputs:
 runs:
   using: composite
   steps:
-    # Results are files named by action key; what checks produced is kept beside them, by digest. GitHub keeps them between runs; each run saves under
-    # a new name and restores the most recent one, so results accumulate.
+    # Results are files named by action key; what checks produced is kept beside them, by digest.
+    # GitHub keeps them between runs. Each run restores the most recent set, for this leg first,
+    # and saves under a new name, so results accumulate. Restoring and saving are separate steps
+    # because the saving must happen when a check fails or the run is cancelled: the checks that
+    # passed are not to be run again on the next attempt.
     - name: Bring back earlier check results
       if: inputs.cache == 'true'
-      uses: actions/cache@v4
+      uses: actions/cache/restore@v4
       with:
         path: |
           .holo/results
           .holo/outputs
-        key: holo-results-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}
-        restore-keys: holo-results-${{ runner.os }}-
+        key: holo-results-${{ runner.os }}-${{ inputs.checks }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          holo-results-${{ runner.os }}-${{ inputs.checks }}-
+          holo-results-${{ runner.os }}-
     - name: See which checks have no result for this content
       id: plan
       shell: bash
@@ -64,6 +72,8 @@ runs:
         HOLO_CHECKS: ${{ inputs.checks }}
         HOLO_STRICT: ${{ inputs.strict }}
         HOLO_FAIL_FAST: ${{ inputs.fail-fast }}
+        HOLO_RETRY: ${{ inputs.retry }}
+        HOLO_ATTEMPT: ${{ github.run_attempt }}
         HOLO_STORE: ${{ inputs.store }}
         HOLO_SIGNERS_REF: ${{ inputs.signers-ref }}
       run: |
@@ -71,6 +81,9 @@ runs:
         flags=''
         if [ "$HOLO_STRICT" = 'true' ]; then flags='--strict'; fi
         if [ "$HOLO_FAIL_FAST" = 'true' ]; then flags="$flags --fail-fast"; fi
+        # A re-run of the same content is someone saying a failure was not the content's fault.
+        # Stored failures run again; stored passes stand.
+        if [ "$HOLO_RETRY" = 'true' ] || { [ "$HOLO_RETRY" = 'auto' ] && [ "$HOLO_ATTEMPT" -gt 1 ]; }; then flags="$flags --retry"; fi
         # The status must be taken here: a later command would replace it.
         status=0
         # shellcheck disable=SC2086
@@ -83,3 +96,11 @@ runs:
           echo '```'
         } >>"$GITHUB_STEP_SUMMARY"
         exit "$status"
+    - name: Keep the results, whatever the outcome
+      if: always() && inputs.run == 'true' && inputs.cache != 'false'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          .holo/results
+          .holo/outputs
+        key: holo-results-${{ runner.os }}-${{ inputs.checks }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
