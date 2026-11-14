@@ -396,7 +396,7 @@ h2.day { display: flex; align-items: center; gap: var(--base-size-8); color: var
 @media (max-width: 34rem) { .app-header nav { display: none; } .menu-list li.narrow-only { display: block; } }
 
 /* Home */
-.columns.dashboard { grid-template-columns: minmax(0, 1fr) var(--overlay-width-medium); align-items: start; }
+.columns.dashboard { align-items: start; }
 @media (max-width: 63.25rem) { .columns.dashboard { grid-template-columns: minmax(0, 1fr); } }
 .feed-row { align-items: flex-start; }
 .feed-detail { display: block; margin-top: var(--base-size-4); color: var(--fgColor-default); overflow-wrap: anywhere; }

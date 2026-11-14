@@ -62,6 +62,7 @@ test('dashboard, profile and explore: what happened, a year of contributions, an
   assert.match(await page.text('.feed-row'), /Formatting drops leading zeros/);
   await page.waitFor("!!document.querySelector('.heatmap')", 'the heatmap');
   assert.equal(await page.eval("document.querySelectorAll('.heatmap i').length >= 365"), true, 'a year of days');
+  assert.ok(await page.eval("(() => { const day = [...document.querySelectorAll('.heatmap i')].pop(); const box = document.querySelector('.heat-scroll').getBoundingClientRect(); const r = day.getBoundingClientRect(); return day.dataset.level !== '0' && r.right <= box.right + 1 && r.left >= box.left; })()"), 'today is coloured and in view');
   assert.match(await page.eval("document.querySelector('.heatmap').getAttribute('aria-label')"), /: [1-9]\d* in the last/, 'the issue and the first commit count');
   assert.deepEqual(await page.eval("[...document.querySelectorAll('.repo-list a.title')].map((a) => a.textContent)"), ['ada-example / demo']);
   // Failure: a filter that matches nothing.

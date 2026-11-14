@@ -69,6 +69,8 @@ async function contributions(items, mine, who) {
   }
   return counts;
 }
+// Where the year does not fit, the newest weeks are the ones in view.
+const showLatest = (holder) => { const scroller = holder.querySelector('.heat-scroll'); if (scroller) scroller.scrollLeft = scroller.scrollWidth; };
 function heatBox(counts) {
   return box({ head: el('strong', {}, S.home.contributions(counts.reduce((a, b) => a + b, 0))), body: el('div', { class: 'heat-scroll' }, heatmap(counts, { label: S.parts.contributions })) });
 }
@@ -101,6 +103,7 @@ export async function dashboard() {
     const feed = await activity(items);
     feedBox.replaceChildren(box({ head: el('strong', {}, S.home.activity), rows: feed.length ? feed.map((item) => feedRow(item, mine)) : blankslate({ icon: 'clock', title: S.home.noActivity }) }));
     heat.replaceChildren(heatBox(await contributions(items, mine, profile())));
+    showLatest(heat);
   }, 0);
   return { title: S.home.dashboard };
 }
@@ -120,7 +123,7 @@ export async function profilePage({ params, query }) {
     el('div', { class: 'stack' }, tabs([{ label: S.profile.overview, icon: 'book', href: href(`/${params.owner}`), current: tab === 'overview' }, { label: S.home.title, icon: 'repo', href: `${href(`/${params.owner}`)}?tab=repositories`, current: tab === 'repositories', count: items.length }], { label: S.profile.tabs, flush: true }),
       tab === 'overview' ? [self ? heat : '', items.length ? [el('h2', { class: 'small muted' }, S.home.title), box({ rows: items.slice(0, 6).map((item) => repoRow(item.repo)) })] : repos, feedBox] : repos)));
   if (tab === 'overview') setTimeout(async () => {
-    if (self) heat.replaceChildren(heatBox(await contributions(await library(), mine, profile())));
+    if (self) { heat.replaceChildren(heatBox(await contributions(await library(), mine, profile()))); showLatest(heat); }
     const feed = (await activity(items, 15));
     if (feed.length) feedBox.replaceChildren(box({ head: el('strong', {}, S.home.activity), rows: feed.map((item) => feedRow(item, mine)) }));
   }, 0);
