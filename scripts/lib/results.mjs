@@ -15,6 +15,7 @@
 //
 // Store layout, over plain GET and PUT (the stand-in store, or any S3-compatible one):
 //   results/<action key>/<signer key>.json
+//   outputs/<digest>.tar          files a check produced, for checks that consume them
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -52,8 +53,9 @@ export function parseSigners(text) {
   return signers;
 }
 
-export async function sign(key, { action, name, result, tools, seconds, commit }) {
+export async function sign(key, { action, name, result, tools, seconds, commit, output }) {
   const record = { type: 'result', action, name, result, tools: JSON.stringify(tools), time: Date.now(), key: key.id, publicKey: key.publicKey, seconds, commit };
+  if (output !== undefined) record.output = output;
   record.signature = b64(await crypto.subtle.sign(SIGN, key.privateKey, statement(record)));
   return record;
 }
@@ -98,6 +100,23 @@ export function openStore(url, env = process.env) {
     async publish(record) {
       try {
         const response = await request('PUT', path(record.action, record.key), JSON.stringify(record));
+        return response.ok ? null : `the store answered ${response.status}`;
+      } catch (error) { return error.message; }
+    },
+    // Produced files, named by their digest. Whoever reads them checks the digest, so they need no signature.
+    async getOutput(digest) {
+      try {
+        const response = await request('GET', `outputs/${digest}.tar`);
+        return response.ok ? new Uint8Array(await response.arrayBuffer()) : null;
+      } catch { return null; }
+    },
+    async putOutput(digest, bytes) {
+      try {
+        if ((await request('GET', `outputs/${digest}.tar`)).ok) return null;
+        const target = `${base}/outputs/${digest}.tar`;
+        let headers = { 'content-type': 'application/x-tar' };
+        if (keys) headers = await signS3({ method: 'PUT', url: target, headers, body: bytes }, keys);
+        const response = await fetch(target, { method: 'PUT', headers, body: bytes, signal: AbortSignal.timeout(60000) });
         return response.ok ? null : `the store answered ${response.status}`;
       } catch (error) { return error.message; }
     },

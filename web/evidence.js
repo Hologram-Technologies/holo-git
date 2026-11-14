@@ -41,6 +41,9 @@ export async function expectedActions(base, next, names) {
   for (const name of names) {
     const definition = definitions.get(name);
     if (!definition) { out.push(null); continue; }
+    // A check that consumes another's output has no key until that output is known. The merge
+    // gate does not follow outputs yet, so here such a check cannot be satisfied.
+    if (definition.uses.length) { out.push(null); continue; }
     try { out.push(await actionKey(definition, (path) => entryAt(nextTree, path))); } catch { return null; }
   }
   return out;

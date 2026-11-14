@@ -40,6 +40,13 @@
 // The store and the signers ref may also be set once per checkout:
 //   git config holo.store URL ; git config holo.signersRef origin/main
 //
+// Produced files. A check may declare `outputs`, paths it writes, and another may name it in
+// `uses`. The producer's result records a digest of what it wrote; the files are kept by that
+// digest and placed in the consumer's directory before it runs. The consumer's key carries the
+// digest, not the producer's sources, so a source change that leaves the product the same runs
+// the producer and nothing after it. Produced files live in .holo/outputs (override with
+// HOLO_OUTPUTS) and, with a store, are shared through it.
+//
 // Results live in .holo/results/<key>.json (override with HOLO_RESULTS). Working directories live
 // under the system's temporary directory (override with HOLO_WORK).
 //
@@ -49,9 +56,9 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir } from 'node:os';
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { actionKey, parseChecks, CHECKS_PATH } from '../web/checks.js';
 import { environmentFor, toolsFor, execute } from './lib/execute.mjs';
 import { SIGNERS_PATH, machineKey, openStore, parseSigners, sign } from './lib/results.mjs';
@@ -120,6 +127,64 @@ function prepare(definition, commit) {
   return directory;
 }
 
+const outputsDir = resolve(process.env.HOLO_OUTPUTS || join(dirname(results), 'outputs'));
+
+// One digest for everything a check produced: each file's path and the SHA-256 of its bytes.
+// Times, owners and modes are left out, so the same files give the same digest on any machine.
+// Returns null when a declared path was not produced.
+function digestOutputs(directory, paths) {
+  const list = [];
+  const walk = (relative) => {
+    const full = join(directory, relative);
+    if (statSync(full).isDirectory()) for (const name of readdirSync(full).sort()) walk(`${relative}/${name}`);
+    else list.push([relative, createHash('sha256').update(readFileSync(full)).digest('hex')]);
+  };
+  for (const path of paths) {
+    if (!existsSync(join(directory, path))) return null;
+    walk(path);
+  }
+  return createHash('sha256').update(JSON.stringify(['holo-git/output/1', list])).digest('hex');
+}
+
+// Keep what a check produced, under its digest.
+function capture(directory, definition, digest) {
+  const target = join(outputsDir, `${digest}.tar`);
+  if (existsSync(target)) return;
+  mkdirSync(outputsDir, { recursive: true });
+  const archive = `${definition.name}.out.tar`;
+  execFileSync('tar', ['-cf', `../${archive}`, ...definition.outputs], { cwd: directory });
+  copyFileSync(join(work, archive), target);
+  rmSync(join(work, archive), { force: true });
+}
+
+// Put a producer's files into a consumer's directory. True only if what is there afterwards has
+// the digest asked for. An archive from a store is not trusted: it may hold only plain files and
+// directories under the producer's declared paths, and its contents are digested after unpacking.
+async function place(share, producer, digest, directory, consumer) {
+  const source = join(outputsDir, `${digest}.tar`);
+  if (!existsSync(source) && share) {
+    const bytes = await share.store.getOutput(digest);
+    if (bytes) { mkdirSync(outputsDir, { recursive: true }); writeFileSync(source, bytes); }
+  }
+  if (!existsSync(source)) return false;
+  const archive = `${consumer}.in.tar`;
+  copyFileSync(source, join(work, archive));
+  let good = false;
+  try {
+    const tar = (...args) => execFileSync('tar', args, { cwd: directory, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const names = tar('-tf', `../${archive}`).split('\n').map((line) => line.trim().replace(/\/+$/, '')).filter(Boolean);
+    const kinds = tar('-tvf', `../${archive}`).split('\n').filter(Boolean).map((line) => line[0]);
+    const inside = (name) => !name.startsWith('/') && !name.includes('\\') && !name.split('/').includes('..') && producer.outputs.some((path) => name === path || name.startsWith(`${path}/`));
+    if (names.every(inside) && kinds.every((kind) => kind === '-' || kind === 'd')) {
+      tar('-xf', `../${archive}`);
+      good = digestOutputs(directory, producer.outputs) === digest;
+    }
+  } catch { good = false; }
+  rmSync(join(work, archive), { force: true });
+  if (!good) rmSync(source, { force: true }); // it is not what its name says
+  return good;
+}
+
 // Who is trusted, where results are shared, and whether this machine adds to them.
 async function sharing(options) {
   const store = openStore(options.store);
@@ -145,7 +210,7 @@ async function shared(share, key, name) {
   if (!share) return null;
   const record = await share.store.find(key, name, share.trusted);
   if (!record) return null;
-  return { name, key, result: record.result, seconds: record.seconds, at: new Date(record.time).toISOString(), commit: record.commit, tools: JSON.parse(record.tools), signed: record };
+  return { name, key, result: record.result, seconds: record.seconds, at: new Date(record.time).toISOString(), commit: record.commit, tools: JSON.parse(record.tools), output: record.output, signed: record };
 }
 
 const save = (key, value) => { mkdirSync(results, { recursive: true }); writeFileSync(join(results, `${key}.json`), `${JSON.stringify(value, null, 2)}\n`); };
@@ -193,7 +258,14 @@ async function run(names, { all = false, strict = false, retry = false, failFast
   const share = await sharing(options);
   const definitions = definitionsAt(commit);
   if (!definitions.size) { console.log(`no checks: ${CHECKS_PATH} is not in this commit`); return 0; }
-  const wanted = names.length ? names : [...definitions.keys()];
+  // A check that was asked for brings the checks whose outputs it uses.
+  const wanted = [];
+  const want = (name) => {
+    if (wanted.includes(name)) return;
+    for (const used of (definitions.get(name) || { uses: [] }).uses) want(used);
+    wanted.push(name);
+  };
+  for (const name of names.length ? names : definitions.keys()) want(name);
   let failed = 0;
   let ran = 0;
   let reused = 0;
@@ -204,9 +276,12 @@ async function run(names, { all = false, strict = false, retry = false, failFast
     skipped += 1;
     if (strict || names.length) failed += 1;
   };
+  const lookup = lookupIn(commit);
+  const head = commit === 'HEAD';
+  const id = git('rev-parse', commit);
 
-  // First, everything that needs no run: results already known here or in the store.
-  const pending = [];
+  // waiting: its key is not known yet. ready: it must run. done: it has a result. out: it cannot have one here.
+  const entries = new Map();
   for (const name of wanted) {
     const definition = definitions.get(name);
     if (!definition) { console.log(`${name}: not defined`); failed += 1; continue; }
@@ -214,49 +289,106 @@ async function run(names, { all = false, strict = false, retry = false, failFast
     // Only running the check needs the environment it named.
     const { env, missing } = environmentFor(definition);
     const { observed, problem } = toolsFor(definition, env || environmentFor({ ...definition, env: [] }).env);
-    if (problem) { cannot(name, problem); continue; }
-    const key = await actionKey(definition, lookupIn(commit));
-    let known = all ? null : stored(key);
-    if (known && retry && known.result !== 'pass') known = null;
-    let from = '';
-    if (!known && !all) {
-      known = await shared(share, key, name);
-      if (known && retry && known.result !== 'pass') known = null;
-      if (known) from = `, signed by ${share.trusted.get(known.signed.key)}`;
-    }
-    // A stored result is reused only if it was made with tools that print what these print now.
-    if (known && JSON.stringify(known.tools || []) === JSON.stringify(observed)) {
-      console.log(`${name}: ${known.result}, reused${from} (${key.slice(0, 12)}, first run ${known.at}, took ${known.seconds}s then)`);
-      if (from) save(key, known);
-      // A result made here before the store was named is shared now.
-      else if (share && known.signed && known.signed.key === share.me.id && !(await share.store.has(key, share.me.id))) await publish(share, name, known.signed);
-      reused += 1;
-      if (known.result !== 'pass') failed += 1;
-      continue;
-    }
-    pending.push({ name, definition, env, missing, observed, key });
+    if (problem) { cannot(name, problem); entries.set(name, { name, definition, status: 'out' }); continue; }
+    entries.set(name, { name, definition, env, missing, observed, status: 'waiting', placed: 0 });
   }
+  const passed = (name) => entries.has(name) && entries.get(name).status === 'done' && entries.get(name).record.result === 'pass';
+  const hopeless = (name) => !entries.has(name) || entries.get(name).status === 'out' || (entries.get(name).status === 'done' && !passed(name));
 
-  // Then the checks that must run, soonest-to-fail first.
-  const queue = ordered(pending);
-  const head = commit === 'HEAD';
-  while (queue.length && !(failFast && failed)) {
-    const { name, definition, env, missing, observed, key } = queue.shift();
-    if (missing) { cannot(name, `it needs ${missing.join(', ')} in the environment`); continue; }
+  // A result already known for this entry's key, here or in the store, made with the same tools.
+  const knownFor = async (entry) => {
+    const { name, definition, observed, key } = entry;
+    const usable = (known) => known && !(retry && known.result !== 'pass')
+      // A stored result is reused only if it was made with tools that print what these print now,
+      // and a producer's only if it says what was produced.
+      && JSON.stringify(known.tools || []) === JSON.stringify(observed)
+      && (!definition.outputs.length || known.result !== 'pass' || (typeof known.output === 'string' && known.output));
+    const here = stored(key);
+    if (usable(here)) return { known: here, from: '' };
+    const there = await shared(share, key, name);
+    if (usable(there)) return { known: there, from: `, signed by ${share.trusted.get(there.signed.key)}` };
+    return null;
+  };
+
+  const execOne = async (entry, again) => {
+    const { name, definition, env, observed, key } = entry;
+    if (entry.missing) { cannot(name, `it needs ${entry.missing.join(', ')} in the environment`); entry.status = 'out'; return; }
     if (head && git('status', '--porcelain', '--', ...definition.inputs)) console.log(`${name}: note, uncommitted changes under its inputs are not part of what is checked`);
-    console.log(`${name}: running (${key.slice(0, 12)}): ${definition.run}`);
     const directory = prepare(definition, commit);
-    const { result, seconds } = execute(definition, join(directory, definition.cwd), env);
-    const id = git('rev-parse', commit);
-    const signed = share ? await sign(share.me, { action: key, name, result, tools: observed, seconds, commit: id }) : undefined;
-    save(key, { name, key, result, seconds, at: new Date().toISOString(), commit: id, tools: observed, signed });
+    for (const used of definition.uses) {
+      const producer = entries.get(used);
+      if (await place(share, producer.definition, producer.record.output, directory, name)) continue;
+      // The result says what was produced, but the files are not to be had. Produce them again.
+      entry.placed += 1;
+      if (entry.placed > 2) {
+        console.log(`${name}: fail, what ${used} produced could not be placed in its directory. Do its inputs overlap ${used}'s outputs?`);
+        entry.status = 'done'; entry.record = { name, key, result: 'fail' }; failed += 1;
+        return;
+      }
+      console.log(`${used}: what it produced is not on this machine`);
+      await execOne(producer, true);
+      entry.status = 'waiting'; // its key is derived again, from what was produced this time
+      return;
+    }
+    console.log(`${name}: running${again ? ' again' : ''} (${key.slice(0, 12)}): ${definition.run}`);
+    const outcome = execute(definition, join(directory, definition.cwd), env);
+    let { result } = outcome;
+    let output;
+    if (definition.outputs.length) {
+      output = result === 'pass' ? digestOutputs(directory, definition.outputs) : '';
+      if (output === null) { console.log(`${name}: it did not produce ${definition.outputs.join(', ')}`); result = 'fail'; output = ''; }
+      if (output) capture(directory, definition, output);
+      if (again && output && entry.record && entry.record.output !== output) console.log(`${name}: note, it produced something other than its earlier result said. It is not reproducible, or that result was wrong.`);
+    }
+    const signed = share ? await sign(share.me, { action: key, name, result, tools: observed, seconds: outcome.seconds, commit: id, output }) : undefined;
+    const record = { name, key, result, seconds: outcome.seconds, at: new Date().toISOString(), commit: id, tools: observed, output, signed };
+    save(key, record);
     await publish(share, name, signed);
-    console.log(`${name}: ${result} in ${seconds}s`);
+    if (output && share && share.publishes) {
+      const problem = await share.store.putOutput(output, readFileSync(join(outputsDir, `${output}.tar`)));
+      if (problem) console.log(`${name}: note, what it produced was not shared: ${problem}`);
+    }
+    console.log(`${name}: ${result} in ${outcome.seconds}s`);
     ran += 1;
     if (result !== 'pass') failed += 1;
+    entry.status = 'done';
+    entry.record = record;
+  };
+
+  for (;;) {
+    // Everything that needs no run, as far as it reaches: a known result gives a digest, which
+    // gives the next key, which may have a known result too.
+    let progressed = false;
+    for (const entry of entries.values()) {
+      if (entry.status !== 'waiting') continue;
+      const { name, definition } = entry;
+      const lost = definition.uses.find(hopeless);
+      if (lost) { cannot(name, `it uses ${lost}, which has no passing result`); entry.status = 'out'; progressed = true; continue; }
+      if (!definition.uses.every(passed)) continue;
+      entry.key = await actionKey(definition, lookup, new Map(definition.uses.map((used) => [used, entries.get(used).record.output])));
+      const found = all || entry.placed ? null : await knownFor(entry);
+      if (!found) { entry.status = 'ready'; continue; }
+      const { known, from } = found;
+      console.log(`${name}: ${known.result}, reused${from} (${entry.key.slice(0, 12)}, first run ${known.at}, took ${known.seconds}s then)`);
+      if (from) save(entry.key, known);
+      // A result made here before the store was named is shared now.
+      else if (share && known.signed && known.signed.key === share.me.id && !(await share.store.has(entry.key, share.me.id))) await publish(share, name, known.signed);
+      reused += 1;
+      if (known.result !== 'pass') failed += 1;
+      entry.status = 'done';
+      entry.record = known;
+      progressed = true;
+    }
+    if (progressed) continue;
+    if (failFast && failed) break;
+    // Then one check that must run, the soonest to fail first.
+    const [next] = ordered([...entries.values()].filter((entry) => entry.status === 'ready'));
+    if (!next) break;
+    await execOne(next, false);
   }
-  if (queue.length) console.log(`not run after the first failure: ${queue.map(({ name }) => name).join(', ')}`);
-  console.log(`${wanted.length} check${wanted.length === 1 ? '' : 's'}: ${ran} ran, ${reused} reused, ${skipped} skipped, ${failed} failing${queue.length ? `, ${queue.length} not run` : ''}, ${Math.round((Date.now() - started) / 100) / 10}s`);
+  const left = [...entries.values()].filter((entry) => entry.status === 'ready' || entry.status === 'waiting').map(({ name }) => name);
+  if (left.length) console.log(`not run after the first failure: ${left.join(', ')}`);
+  console.log(`${wanted.length} check${wanted.length === 1 ? '' : 's'}: ${ran} ran, ${reused} reused, ${skipped} skipped, ${failed} failing${left.length ? `, ${left.length} not run` : ''}, ${Math.round((Date.now() - started) / 100) / 10}s`);
   return failed ? 1 : 0;
 }
 
@@ -295,11 +427,23 @@ function hook(action) {
 
 async function keys(options) {
   const share = await sharing(options);
-  for (const definition of definitionsAt('HEAD').values()) {
-    const key = await actionKey(definition, lookupIn('HEAD'));
-    const known = stored(key) || await shared(share, key, definition.name);
-    console.log(`${key}  ${definition.name}  ${known ? known.result : 'no result'}`);
+  const definitions = definitionsAt('HEAD');
+  const lookup = lookupIn('HEAD');
+  const lines = new Map();
+  const produced = new Map();
+  // A check that uses another has a key only once that other has a passing result.
+  for (let progressed = true; progressed;) {
+    progressed = false;
+    for (const definition of definitions.values()) {
+      if (lines.has(definition.name) || !definition.uses.every((used) => produced.has(used))) continue;
+      const key = await actionKey(definition, lookup, produced);
+      const known = stored(key) || await shared(share, key, definition.name);
+      if (known && known.result === 'pass' && typeof known.output === 'string' && known.output) produced.set(definition.name, known.output);
+      lines.set(definition.name, `${key}  ${definition.name}  ${known ? known.result : 'no result'}`);
+      progressed = true;
+    }
   }
+  for (const definition of definitions.values()) console.log(lines.get(definition.name) || `${'-'.repeat(64)}  ${definition.name}  no result`);
   return 0;
 }
 
@@ -307,6 +451,12 @@ async function keys(options) {
 // needed if every result were reused, against one run of every check per commit?
 async function history(last, ref, file) {
   const definitions = file ? parseChecks(readFileSync(file)) : definitionsAt('HEAD');
+  // What a check that uses another would have needed cannot be known without running the other.
+  for (const definition of [...definitions.values()]) {
+    if (!definition.uses.length) continue;
+    console.log(`${definition.name}: left out, its key depends on what ${definition.uses.join(', ')} produced at each commit`);
+    definitions.delete(definition.name);
+  }
   if (!definitions.size) { console.log('no checks defined'); return 0; }
   const commits = git('rev-list', '--first-parent', `--max-count=${last}`, ref).split('\n').reverse();
   const seen = new Map([...definitions.keys()].map((name) => [name, new Set()]));

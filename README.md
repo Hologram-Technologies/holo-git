@@ -304,6 +304,48 @@ What to know:
 - **An existing `pre-push` hook is never replaced.** Call `check.mjs prepush "$@"` from it instead.
 - `--commit REV` checks any commit without checking it out.
 
+## Key a check by what it consumes, not by where its sources live
+
+A test that runs a compiled program depends on the program, not on the compiler's source. Keyed by source, every compiler change runs every test. Keyed by the product, a change that leaves the product byte for byte the same runs the build and nothing after it. On the larger project measured in the roadmap this was the difference between 1,316 runs and 70.
+
+**When the product is committed**, nothing new is needed: name it as an input. One check confirms the committed product is what the sources produce; the expensive check reads only the product.
+
+```json
+{
+  "checks": [
+    { "name": "generate", "run": "tool build --check", "inputs": ["compiler", "examples/a/src", "examples/a/expected"] },
+    { "name": "verify-a", "run": "lake build", "cwd": "examples/a", "inputs": ["examples/a/expected", "examples/a/lean-toolchain", "examples/a/lakefile.toml"] }
+  ]
+}
+```
+
+**When the product is built, not committed**, the producer declares `outputs` and the consumer names it in `uses`:
+
+```json
+{
+  "checks": [
+    { "name": "build", "run": "make dist", "inputs": ["src", "Makefile"], "outputs": ["dist"] },
+    { "name": "test", "run": "sh tests/run.sh", "inputs": ["tests"], "uses": ["build"] }
+  ]
+}
+```
+
+- The producer's result records one digest of everything under its `outputs`: each file's path and the SHA-256 of its bytes. Times and modes are left out.
+- The files are placed in the consumer's directory before it runs. The consumer's key carries the digest.
+- The producer always runs first, whatever the order in the file. Asking for a consumer brings its producer.
+- With a store, the digest is part of the signed result and the files are shared under their digest. Another machine reuses both results without fetching anything; it fetches the files only when a consumer must actually run.
+
+What to know:
+
+- **This only pays if the build is reproducible.** A build that embeds a time or a path produces a new digest every run, and every consumer runs every time. Nothing here makes a build reproducible; it only rewards one that is.
+- **A consumer still waits for its producer.** The producer runs whenever its sources change. What is saved is everything after it.
+- **Files from a store are not trusted.** An archive may hold only plain files and directories under the producer's declared paths, and what is unpacked is digested before the consumer runs. A missing or altered archive means the producer runs here instead. Tested, including an archive that reaches outside its paths.
+- **A consumer's inputs must not overlap its producer's outputs.** The placed files would not match their digest, and the consumer fails saying so.
+- **A producer that passes without writing what it declared fails.**
+- **`history` leaves such consumers out.** What they would have needed cannot be known without running the producer at each commit.
+- **The merge gate in the browser does not follow outputs yet.** There, a required check that uses another cannot be satisfied. This works today in a git checkout and through the GitHub action.
+- **Products made before a store was named are not uploaded later.** They are shared when they are made.
+
 ## Self-hosting: what has been done, and what has not
 
 On 2026-11-14 this repository was developed through itself for three changes, on one machine.

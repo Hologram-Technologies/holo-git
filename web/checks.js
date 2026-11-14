@@ -11,6 +11,12 @@
 // a runner refuses to run a check whose declared tools it does not have, and gives the check no
 // environment variable it did not name. What a check may depend on is then exactly what is in
 // its key.
+//
+// A check may also produce files (`outputs`) and another may consume them (`uses`). The consumer's
+// key then carries a digest of the files produced, not the labels of the sources they were made
+// from. A change to the sources that leaves the product byte for byte the same leaves the
+// consumer's key the same, so its result is reused. That key cannot be derived from a tree alone:
+// it needs the producer's result, which states the digest.
 
 const utf8 = new TextEncoder();
 const hex = (bytes) => Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -51,18 +57,49 @@ export function parseChecks(bytes) {
       // Directories kept between runs to save time (build output, downloaded packages). They are
       // not part of the key, so they must never change what a check concludes.
       keep: paths(check.keep || [], check.name, 'kept directory'),
+      // Paths the check writes, for other checks to consume, and the checks whose outputs it consumes.
+      outputs: paths(check.outputs || [], check.name, 'output'),
+      uses: [...new Set(check.uses || [])],
     });
   }
+  for (const check of checks.values()) {
+    for (const used of check.uses) {
+      if (!checks.has(used) || used === check.name) throw new Error(`checks file: ${check.name} uses ${JSON.stringify(used)}, which is not another check here`);
+      if (!checks.get(used).outputs.length) throw new Error(`checks file: ${check.name} uses ${used}, which declares no outputs`);
+    }
+  }
+  // Nothing may consume its own product, however indirectly.
+  const state = new Map();
+  const visit = (name) => {
+    if (state.get(name) === 'done') return;
+    if (state.get(name) === 'open') throw new Error(`checks file: ${name} uses itself through other checks`);
+    state.set(name, 'open');
+    for (const used of checks.get(name).uses) visit(used);
+    state.set(name, 'done');
+  };
+  for (const name of checks.keys()) visit(name);
   return checks;
 }
 
 // `lookup(path)` returns { mode, id } for that path in the tree being checked, or null if absent.
-export async function actionKey(definition, lookup) {
+// `produced` maps each check this one uses to the digest of what that check produced. Without it
+// the key of a check that uses another is not known, and asking for it is an error.
+export async function actionKey(definition, lookup, produced) {
   const labels = [];
   for (const path of definition.inputs) {
     const entry = await lookup(path);
     labels.push(entry ? [path, entry.mode, entry.id] : [path, 'absent', '']);
   }
-  const preimage = JSON.stringify(['holo-git/check-key/2', definition.name, definition.run, definition.cwd, definition.tools, definition.env, labels]);
+  const base = [definition.name, definition.run, definition.cwd, definition.tools, definition.env, labels];
+  // Checks with no outputs and no uses keep the key they always had.
+  let preimage = JSON.stringify(['holo-git/check-key/2', ...base]);
+  if (definition.outputs.length || definition.uses.length) {
+    const used = definition.uses.map((name) => {
+      const digest = produced && produced.get(name);
+      if (typeof digest !== 'string' || !digest) throw new Error(`the key of ${definition.name} needs what ${name} produced`);
+      return [name, digest];
+    });
+    preimage = JSON.stringify(['holo-git/check-key/3', ...base, definition.outputs, used]);
+  }
   return hex(await crypto.subtle.digest('SHA-256', utf8.encode(preimage)));
 }

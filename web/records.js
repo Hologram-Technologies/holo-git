@@ -30,6 +30,8 @@ export function statement(r) {
   else if (type === 'check') fields = ['holo-git/check/1', r.repo, r.name, r.action, r.result, String(r.time), r.key, r.previous];
   // A check result that stands on its own, outside any repository's chain: it is bound to the
   // content by its action key, so it means the same wherever it is read.
+  // The second form adds the digest of the files the check produced, which other checks' keys rest on.
+  else if (type === 'result' && r.output !== undefined) fields = ['holo-git/result/2', r.action, r.name, r.result, r.tools, r.output, String(r.time), r.key];
   else if (type === 'result') fields = ['holo-git/result/1', r.action, r.name, r.result, r.tools, String(r.time), r.key];
   else throw new Error('unknown record type');
   if (fields.some((field) => typeof field !== 'string' || /[\n\r]/.test(field))) throw new Error('a record field is missing or contains a line break');
