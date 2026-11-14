@@ -65,7 +65,7 @@ function blobView(content) {
 }
 
 async function home() {
-  const input = el('input', { type: 'url', placeholder: 'https://example.org/project.git', 'aria-label': 'Replica address', value: `${location.origin}/fixtures/holo-git.git` });
+  const input = el('input', { type: 'url', placeholder: 'https://example.org/project.git', 'aria-label': 'Replica address', value: new URL('fixtures/holo-git.git', location.href.split('#')[0]).href });
   const note = el('p', { class: 'muted' });
   const form = el('form', { onsubmit: async (event) => {
     event.preventDefault();

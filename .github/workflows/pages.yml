@@ -1,0 +1,50 @@
+# Tests the engine against git, builds it for the browser, and publishes the page
+# with a static replica of this repository beside it, so the page can clone its own source.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out with full history, so the replica has it
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Add the WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+      - name: Test the engine against git
+        working-directory: engine
+        run: cargo test --release
+      - name: Build the engine and the replica
+        run: sh scripts/build-web.sh
+      - name: Upload the page
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
