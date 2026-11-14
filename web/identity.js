@@ -111,3 +111,38 @@ export async function recordCheck(repo, name, action, result) {
   await appendRecord(repo, record);
   return record;
 }
+
+// Issues. Each is a signed record on the repository's log, judged by the kernel like every other:
+// reading is enough to open an issue or comment; triage needs write access.
+const freshId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+const add = async (repo, fields) => { const record = await sign(repo, fields); await appendRecord(repo, record); return record; };
+
+export async function openIssue(repo, { title, body = '', name }) {
+  title = String(title).replace(/[\n\r]/g, ' ').trim().slice(0, 200);
+  if (!title) throw new Error('an issue needs a title');
+  const id = freshId();
+  await add(repo, { type: 'issue', id, title, body: String(body), name: String(name || ''), at: Date.now() });
+  return id;
+}
+export async function addComment(repo, issue, { body, name }) {
+  if (!String(body).trim()) throw new Error('a comment needs some text');
+  return add(repo, { type: 'comment', issue, body: String(body), name: String(name || ''), at: Date.now() });
+}
+// field: title, body, state, labels, milestone or assignees. Lists are given as arrays.
+export async function setIssue(repo, issue, field, value, name) {
+  return add(repo, { type: 'issue-set', issue, field, value: Array.isArray(value) ? value.join(',') : String(value), name: String(name || ''), at: Date.now() });
+}
+export async function saveLabel(repo, { name, color, description = '' }) {
+  name = String(name).trim();
+  if (!name || name.length > 50 || /[,\n\r]/.test(name)) throw new Error('a label name is 1 to 50 characters without commas');
+  if (!/^#?[0-9a-fA-F]{6}$/.test(color)) throw new Error('a label colour is six hexadecimal digits');
+  return add(repo, { type: 'label', name, color: color.replace('#', '').toLowerCase(), description: String(description).slice(0, 200) });
+}
+export const removeLabel = (repo, name) => add(repo, { type: 'label-remove', name });
+export async function saveMilestone(repo, { id, title, description = '', due = '', state = 'open' }) {
+  title = String(title).replace(/[\n\r]/g, ' ').trim().slice(0, 100);
+  if (!title) throw new Error('a milestone needs a title');
+  const milestone = id || freshId();
+  await add(repo, { type: 'milestone', id: milestone, title, description: String(description).slice(0, 2000), due, state });
+  return milestone;
+}

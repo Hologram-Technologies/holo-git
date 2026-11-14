@@ -13,8 +13,14 @@ import { isAncestor } from './ancestry.js';
 import { expectedActions } from './evidence.js';
 import { isCheckName } from './checks.js';
 
-const KINDS = { ref: 'change', grant: 'grant', revoke: 'revocation', protect: 'protection', unprotect: 'removal of protection', pr: 'pull request', approve: 'approval', check: 'check result' };
-const REQUIRED = { grant: MODE.admin, revoke: MODE.admin, protect: MODE.admin, unprotect: MODE.admin, pr: MODE.read, approve: MODE.write, check: MODE.write };
+const KINDS = { ref: 'change', grant: 'grant', revoke: 'revocation', protect: 'protection', unprotect: 'removal of protection', pr: 'pull request', approve: 'approval', check: 'check result',
+  issue: 'issue', comment: 'comment', 'issue-set': 'change to an issue', label: 'label', 'label-remove': 'removal of a label', milestone: 'milestone' };
+const REQUIRED = { grant: MODE.admin, revoke: MODE.admin, protect: MODE.admin, unprotect: MODE.admin, pr: MODE.read, approve: MODE.write, check: MODE.write,
+  // Anyone who can read can open an issue and comment. Triage (labels, milestones, assignees, other people's issues) needs write access.
+  issue: MODE.read, comment: MODE.read, 'issue-set': MODE.write, label: MODE.write, 'label-remove': MODE.write, milestone: MODE.write };
+const ID = /^[0-9a-f]{32}$/;
+const TEXT_LIMIT = 65536;
+export const ISSUE_FIELDS = ['title', 'body', 'state', 'labels', 'milestone', 'assignees'];
 export const GRANTABLE = ['read', 'write'];
 // Who may move a protected branch: anyone with write access, or only the owner.
 export const PUSHERS = ['write', 'admin'];
@@ -24,8 +30,11 @@ const pullKey = (ref, head) => `${ref}\n${head}`;
 // (before a clone has fetched any objects) such changes are listed in `unverified`, and the
 // caller must fold again, strictly, once the objects are there.
 export async function fold(records, { strict = false } = {}) {
-  const state = { owner: records.length ? records[0].key : null, heads: {}, grants: new Map(), protections: new Map(), pulls: [], checks: new Map(), digest: '', count: records.length, unverified: [] };
+  const state = { owner: records.length ? records[0].key : null, heads: {}, grants: new Map(), protections: new Map(), pulls: [], checks: new Map(), digest: '', count: records.length, unverified: [],
+    issues: [], labels: new Map(), milestones: [] };
   const pulls = new Map();
+  const issues = new Map();
+  const milestones = new Map();
   // A key's standing at a moment: what it could do if it signed something then.
   const standing = (key, now) => {
     if (key === state.owner) return MODE.owner;
@@ -82,7 +91,12 @@ export async function fold(records, { strict = false } = {}) {
       }
       allowed = gate({ signed, required: rule ? MODE[rule.minimum] : MODE.write, links, now, fastForward, forceAllowed: !rule,
         approvalsHave, approvalsNeeded: rule ? rule.approvals : 0, checksHave, checksNeeded: required.length });
-    } else allowed = decide({ signed, required: REQUIRED[type], links, now });
+    } else {
+      let required = REQUIRED[type];
+      // The author of an issue may retitle, rewrite, close and reopen it with the access that let them open it.
+      if (type === 'issue-set') { const issue = issues.get(record.issue); if (issue && issue.author === record.key && ['title', 'body', 'state'].includes(record.field)) required = MODE.read; }
+      allowed = decide({ signed, required, links, now });
+    }
     if (!allowed) throw new Error(`refused by the kernel: a ${KINDS[type]} by key ${String(record.key).slice(0, 12)} does not count`);
 
     if (type === 'ref') {
@@ -107,7 +121,8 @@ export async function fold(records, { strict = false } = {}) {
       if (!/^refs\/heads\/\S+$/.test(record.ref) || !/^[0-9a-f]{40}$/.test(record.head) || !record.title || record.title.length > 200) throw new Error('refused: a malformed pull request in the log');
       if (!pulls.has(pullKey(record.ref, record.head))) {
         // A pull request's number is its place among pull requests in the log, the same for everyone.
-        const pull = { number: state.pulls.length + 1, ref: record.ref, head: record.head, title: record.title, author: record.key, time: record.time, approvals: new Set(), merged: false };
+        // Issues and pull requests share one run of numbers, as on any git host.
+        const pull = { number: state.pulls.length + state.issues.length + 1, ref: record.ref, head: record.head, title: record.title, author: record.key, time: record.time, approvals: new Set(), merged: false };
         pulls.set(pullKey(record.ref, record.head), pull);
         state.pulls.push(pull);
       }
@@ -115,6 +130,44 @@ export async function fold(records, { strict = false } = {}) {
       const pull = pulls.get(pullKey(record.ref, record.head));
       if (!pull) throw new Error('refused: an approval of no pull request is in the log');
       pull.approvals.add(record.key);
+    } else if (type === 'issue') {
+      if (!ID.test(record.id) || issues.has(record.id) || !record.title || record.title.length > 200 || String(record.body).length > TEXT_LIMIT || String(record.name).length > 100) throw new Error('refused: a malformed issue in the log');
+      const at = Number(record.at) || record.time;
+      const issue = { id: record.id, number: state.pulls.length + state.issues.length + 1, title: record.title, body: String(record.body), author: record.key, name: record.name, time: at, updated: at, state: 'open', labels: [], milestone: '', assignees: [], events: [], comments: 0 };
+      issues.set(record.id, issue);
+      state.issues.push(issue);
+    } else if (type === 'comment') {
+      const issue = issues.get(record.issue);
+      if (!issue || !String(record.body).trim() || String(record.body).length > TEXT_LIMIT) throw new Error('refused: a malformed comment in the log');
+      const at = Number(record.at) || record.time;
+      issue.events.push({ kind: 'comment', key: record.key, name: record.name, time: at, body: String(record.body) });
+      issue.comments += 1;
+      issue.updated = at;
+    } else if (type === 'issue-set') {
+      const issue = issues.get(record.issue);
+      const value = String(record.value);
+      if (!issue || !ISSUE_FIELDS.includes(record.field)) throw new Error('refused: a malformed change to an issue in the log');
+      const at = Number(record.at) || record.time;
+      const event = { kind: record.field, key: record.key, name: record.name, time: at };
+      if (record.field === 'title') { if (!value || value.length > 200) throw new Error('refused: a malformed change to an issue in the log'); event.from = issue.title; event.to = value; issue.title = value; }
+      else if (record.field === 'body') { if (value.length > TEXT_LIMIT) throw new Error('refused: a malformed change to an issue in the log'); issue.body = value; issue.edited = at; }
+      else if (record.field === 'state') { if (!['open', 'closed'].includes(value)) throw new Error('refused: a malformed change to an issue in the log'); event.to = value; issue.state = value; }
+      else if (record.field === 'labels') { const next = value ? value.split(',').filter((name) => state.labels.has(name)) : []; event.added = next.filter((n) => !issue.labels.includes(n)); event.removed = issue.labels.filter((n) => !next.includes(n)); issue.labels = next; }
+      else if (record.field === 'milestone') { if (value && !milestones.has(value)) throw new Error('refused: a malformed change to an issue in the log'); event.from = issue.milestone; event.to = value; issue.milestone = value; }
+      else { const next = value ? value.split(',') : []; if (next.length > 10 || !next.every((key) => /^[0-9a-f]{64}$/.test(key))) throw new Error('refused: a malformed change to an issue in the log'); event.added = next.filter((k) => !issue.assignees.includes(k)); event.removed = issue.assignees.filter((k) => !next.includes(k)); issue.assignees = next; }
+      if (record.field !== 'body') issue.events.push(event);
+      issue.updated = at;
+    } else if (type === 'label') {
+      if (!record.name || record.name.length > 50 || /[,\n\r]/.test(record.name) || !/^[0-9a-f]{6}$/.test(record.color) || String(record.description).length > 200) throw new Error('refused: a malformed label in the log');
+      state.labels.set(record.name, { color: record.color, description: String(record.description) });
+    } else if (type === 'label-remove') {
+      state.labels.delete(record.name);
+      for (const issue of state.issues) issue.labels = issue.labels.filter((name) => name !== record.name);
+    } else if (type === 'milestone') {
+      if (!ID.test(record.id) || !record.title || record.title.length > 100 || String(record.description).length > 2000 || !/^(\d{4}-\d{2}-\d{2})?$/.test(record.due) || !['open', 'closed'].includes(record.state)) throw new Error('refused: a malformed milestone in the log');
+      const known = milestones.get(record.id);
+      const next = { id: record.id, title: record.title, description: String(record.description), due: record.due, state: record.state, time: known ? known.time : record.time };
+      if (known) Object.assign(known, next); else { milestones.set(record.id, next); state.milestones.push(next); }
     } else {
       if (!isCheckName(record.name) || !/^[0-9a-f]{64}$/.test(record.action) || !['pass', 'fail'].includes(record.result)) throw new Error('refused: a malformed check result in the log');
       // The latest result under a key stands. An earlier one is still in the log for anyone to see.

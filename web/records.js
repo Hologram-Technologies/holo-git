@@ -1,6 +1,7 @@
 // Signed records: the exact bytes that are signed, how a record is named, how it is verified.
-// The kinds share one chain per repository: a ref update, a grant, a revocation, and the
-// protection of a branch or its removal.
+// The kinds share one chain per repository: a ref update, a grant, a revocation, the protection of a
+// branch or its removal, pull requests and approvals, check results, and issues with their comments,
+// labels and milestones.
 
 const utf8 = new TextEncoder();
 const text = new TextDecoder();
@@ -10,6 +11,9 @@ export const unb64 = (value) => Uint8Array.from(atob(value), (c) => c.charCodeAt
 export const sha256 = async (bytes) => hex(await crypto.subtle.digest('SHA-256', bytes));
 export const ECDSA = { name: 'ECDSA', namedCurve: 'P-256' };
 export const SIGN = { name: 'ECDSA', hash: 'SHA-256' };
+
+// Free text (an issue's body, a comment) may hold line breaks. It is signed in its JSON string form, which has none.
+const J = (value) => JSON.stringify(String(value));
 
 // One field per line. No field may contain a line break, so no field can pose as another.
 export function statement(r) {
@@ -28,6 +32,14 @@ export function statement(r) {
   else if (type === 'pr') fields = ['holo-git/pull/1', r.repo, r.ref, r.head, r.title, String(r.time), r.key, r.previous];
   else if (type === 'approve') fields = ['holo-git/approve/1', r.repo, r.ref, r.head, String(r.time), r.key, r.previous];
   else if (type === 'check') fields = ['holo-git/check/1', r.repo, r.name, r.action, r.result, String(r.time), r.key, r.previous];
+  // An issue is named by an identifier chosen when it is written, not by its number: the number is its place
+  // in the log, which can change until the issue is published. `at` is when it was first written; `time` is when it was last signed.
+  else if (type === 'issue') fields = ['holo-git/issue/1', r.repo, r.id, r.title, J(r.body), r.name, String(r.at), String(r.time), r.key, r.previous];
+  else if (type === 'comment') fields = ['holo-git/comment/1', r.repo, r.issue, J(r.body), r.name, String(r.at), String(r.time), r.key, r.previous];
+  else if (type === 'issue-set') fields = ['holo-git/issue-set/1', r.repo, r.issue, r.field, J(r.value), r.name, String(r.at), String(r.time), r.key, r.previous];
+  else if (type === 'label') fields = ['holo-git/label/1', r.repo, r.name, r.color, J(r.description), String(r.time), r.key, r.previous];
+  else if (type === 'label-remove') fields = ['holo-git/label-remove/1', r.repo, r.name, String(r.time), r.key, r.previous];
+  else if (type === 'milestone') fields = ['holo-git/milestone/1', r.repo, r.id, r.title, J(r.description), r.due, r.state, String(r.time), r.key, r.previous];
   // A check result that stands on its own, outside any repository's chain: it is bound to the
   // content by its action key, so it means the same wherever it is read.
   // The second form adds the digest of the files the check produced, which other checks' keys rest on.
