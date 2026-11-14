@@ -1,6 +1,6 @@
 # Prompt: make holo-git feature complete and familiar
 
-You are continuing work on holo-git, a git host that runs entirely in the browser, in the repository `humuhumu33/holo-git`. The engine, the signed log, protected branches, thin pull requests, content-keyed checks and a shared result store exist. The page that shows them is about 600 lines and shows a fraction of what a git host shows. Your job is to close that gap.
+You are continuing work on holo-git, a git host that runs entirely in the browser, in the repository `Hologram-Technologies/holo-git`. The engine, the signed log, protected branches, thin pull requests, content-keyed checks and a shared result store exist. The page that shows them is about 600 lines and shows a fraction of what a git host shows. Your job is to close that gap.
 
 Read `docs/PROMPT.md`, `docs/PARITY.md`, `docs/STUDY.md`, `docs/ROADMAP.md`, `docs/THREAT-MODEL.md` and `README.md` before anything else. They are the record of what was decided and why. Do not re-decide them.
 

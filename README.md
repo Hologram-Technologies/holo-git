@@ -2,7 +2,7 @@
 
 A serverless code-hosting application that runs entirely in the browser, built as a Prism application.
 
-Live page: https://humuhumu33.github.io/holo-git/ . Press Clone and it clones this repository from a static replica published beside it.
+Live page: https://hologram-technologies.github.io/holo-git/ . Press Clone and it clones this repository from a static replica published beside it.
 Gitea is the reference for features. LexLean specifies the rules and Lean proves them. Storage is content-addressed with kappa labels.
 
 Status: Phase 1 complete, with the gaps listed below. Phase 2 works in the browser: clone, browse, diff, blame, offline. Self-hosting has begun; see below. Phase 3: commit in the browser, push to a writable replica, clone it back, fetch and merge, grant and revoke access, export to git. The holo builds on GitHub Actions and replays 16 of 16 acceptance vectors. It rates P0: it does not yet carry provenance, proof or replay statements inside it.
@@ -207,7 +207,7 @@ The checks do not need holo-git's hosting. They work in an ordinary GitHub repos
    - uses: actions/setup-node@v4
      with:
        node-version: 22
-   - uses: humuhumu33/holo-git/.github/actions/checks@<commit>
+   - uses: Hologram-Technologies/holo-git/.github/actions/checks@<commit>
    ```
 
    Pin `<commit>` to a full commit identifier of this repository, not a branch name.
@@ -252,7 +252,7 @@ A result is a small signed file. It is bound to the content by its action key, a
 4. In CI, give the action the same two things:
 
    ```yaml
-   - uses: humuhumu33/holo-git/.github/actions/checks@<commit>
+   - uses: Hologram-Technologies/holo-git/.github/actions/checks@<commit>
      with:
        store: https://store.example/results-bucket
        signers-ref: origin/main
@@ -367,7 +367,7 @@ strategy:
     leg: [unit, integration, docs]
 steps:
   - uses: actions/checkout@v4
-  - uses: humuhumu33/holo-git/.github/actions/checks@<commit>
+  - uses: Hologram-Technologies/holo-git/.github/actions/checks@<commit>
     with:
       checks: ${{ matrix.leg }}
       store: https://store.example/results-bucket

@@ -52,7 +52,7 @@ The first stage's steps were run on the exact merge commits CI tested in those t
 
 Limits: one machine, one day, twelve commits, no repeats for variance. A cold build of the stage took about five minutes. The hardware-instruction probe that one pull request adds to the stage was not run. A replay cannot show whether authors would use it.
 
-Method and per-run figures: `docs/BENCHMARK.md` in `humuhumu33/holo-git`.
+Method and per-run figures: `docs/BENCHMARK.md` in `Hologram-Technologies/holo-git`.
 
 ## What this does not need
 
