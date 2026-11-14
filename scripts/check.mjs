@@ -94,9 +94,10 @@ async function run(names, all, strict, retry) {
       skipped += 1;
       if (strict || names.length) failed += 1;
     };
+    // A result that is already known needs nothing from this machine but its tools' versions.
+    // Only running the check needs the environment it named.
     const { env, missing } = environmentFor(definition);
-    if (missing) { cannot(`it needs ${missing.join(', ')} in the environment`); continue; }
-    const { observed, problem } = toolsFor(definition, env);
+    const { observed, problem } = toolsFor(definition, env || environmentFor({ ...definition, env: [] }).env);
     if (problem) { cannot(problem); continue; }
     const key = await actionKey(definition, lookupIn('HEAD'));
     let known = all ? null : stored(key);
@@ -107,6 +108,7 @@ async function run(names, all, strict, retry) {
       if (known.result !== 'pass') failed += 1;
       continue;
     }
+    if (missing) { cannot(`it needs ${missing.join(', ')} in the environment`); continue; }
     if (git('status', '--porcelain', '--', ...definition.inputs)) console.log(`${name}: note, uncommitted changes under its inputs are not part of what is checked`);
     console.log(`${name}: running (${key.slice(0, 12)}): ${definition.run}`);
     const directory = prepare(definition);

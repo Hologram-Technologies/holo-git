@@ -55,8 +55,12 @@ jobs:
         if: steps.need.outputs.store == 'run'
         run: sh scripts/dev-s3.sh start
       - name: Run the checks that have no result
+        shell: bash
         run: |
-          node scripts/check.mjs run --strict | tee checks.log
+          set -o pipefail
+          # The status must be taken here: a later command would replace it.
+          status=0
+          node scripts/check.mjs run --strict | tee checks.log || status=$?
           {
             echo '## Checks'
             echo
@@ -64,7 +68,7 @@ jobs:
             grep -E '^(engine|page|store|model): |^[0-9]+ checks?:' checks.log
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
-          exit "${PIPESTATUS[0]}"
+          exit "$status"
       - name: Build the page
         run: |
           sh scripts/build-web.sh | tee build.log

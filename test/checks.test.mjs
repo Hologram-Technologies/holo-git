@@ -309,6 +309,12 @@ test('a check sees only the environment it named, and is skipped where a named v
   assert.equal(out.status, 0, 'a check this machine cannot run is skipped');
   assert.equal(elsewhere.run(['run', '--strict'], { SECRET_SETTING: '' }).status, 1, 'unless every check is demanded');
   assert.equal(elsewhere.run(['run', 'needs'], { SECRET_SETTING: '' }).status, 1, 'or that check was asked for by name');
+
+  // Once a result exists, a machine without the variable reuses it: nothing has to run there.
+  assert.equal(elsewhere.run(['run'], { SECRET_SETTING: 'yes' }).status, 0);
+  out = elsewhere.run(['run', '--strict'], { SECRET_SETTING: '' });
+  assert.match(out.stdout, /needs: pass, reused/);
+  assert.equal(out.status, 0, 'a known result is not a failure for want of a variable');
 });
 
 test('the declared tools are part of the key, and a machine without them does not run the check', async () => {
