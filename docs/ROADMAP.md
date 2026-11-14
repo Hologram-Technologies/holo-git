@@ -41,7 +41,43 @@ What can go to zero is everything else:
 
 For a change that touches one file out of many, most checks are in the first category. That is where a large multiple comes from. A change that touches everything gains little. Whether the overall figure is 10 or 100 depends on how much of a team's checking is repeated work, which must be measured, not assumed.
 
+## Measured on a larger codebase
+
+Step 4 below said to measure again before drawing conclusions. Done on 2026-11-14 against LexLean, read only: its main history, 43 completed pull request runs, and the job results of each. The plan changed as a result.
+
+**Reuse keyed by directory is worth little there.** Over the last 150 commits on main, six checks cut along directories would have avoided 20 percent of runs, against 62 percent here. Nearly every commit touches the compiler, and every check reads the compiler.
+
+**Reuse keyed by what a step really consumes is worth a great deal, for the steps that have such a key.** LexLean commits each example's generated Lean, and its gate confirms the compiler reproduces it. Keyed by those bytes and the toolchain files, the examples need 70 Lean runs where today's cut needs 1,316, and the fourteen Atlas shards need 71 where one per commit is 2,100. But those legs are 15 percent of the full gate's machine time. Scenario tests are 49 percent and the other hosts 27 percent; both depend on the compiler itself.
+
+**Inside pull requests there was almost nothing to reuse.** One job minute of 13,695 repeated a leg that had already passed on unchanged inputs. Runs do not get far enough to leave passed work behind:
+
+| What happened | Runs | Wall time, median | Work done, median |
+|---|---|---|---|
+| Failed at the first stage | 12 | 66 min | 3 job minutes |
+| Cancelled at the first stage | 19 | 15 min | none |
+| Reached the full gate and did not pass | 8 | about 4 hours | about 21 machine-hours |
+| Reached the full gate and passed | 1 | 13 hours | 21 machine-hours |
+
+The usual first-stage failure is a check that fails in about two minutes. The first leg of a run starts a median 21 minutes after the run is created, and up to 70. The cause of that wait was not confirmed; a queue for runners is the likely one.
+
+So the time goes, in order, to: waiting an hour to be told what two minutes on the author's machine would have said; a full gate that costs 21 machine-hours an attempt and passes one time in nine; and only then to repeated work.
+
+Limits of this measurement: the input sets were drawn from directory names and the recipe list, not from tracing what each recipe opens; pushes were compared head to head, ignoring movement of the base branch; five comparisons exceeded the 300-file limit and were counted as changing everything; and LexLean's own specification requires its gate to run from a clean checkout, so any reuse there is its maintainers' decision.
+
 ## Order of work
+
+What is left, reordered by the measurement above. The numbered list after it records what is done.
+
+1. **A result that arrives with the push.** A shared store of signed check results, so that a check run on the author's machine before pushing is the result the gate reads. No queue, and a two-minute failure costs two minutes. The local runner and the signed records exist; the store that others read them from does not. This is the largest measured loss and the smallest piece of work.
+2. **Fail first, and say so.** Run checks in order of cost and of how often they fail, stop at the first failure, and refuse the push locally. The measured case: the cheapest check was also the one that failed most.
+3. **Keys from what a step consumes, not where files live.** Let a check name a produced file as its input (generated Lean, a compiled binary), so a change upstream that leaves the product unchanged runs nothing downstream. Proven on the examples and Atlas above; this is also "reuse inside a check" from step 5.
+4. **A gate that keeps what passed.** When one leg of many fails, the others' results stand, and the next attempt runs only the failed leg and whatever its fix touched. Worth little until 1 to 3 let runs reach the gate; then it is what turns 21 machine-hours an attempt into the cost of the change.
+5. **Tests keyed one by one.** The largest share of a big gate is tests that all read the program under test. Reuse there needs to know what each test reads. Unmeasured and the hardest; do not start before measuring one real suite.
+6. The remaining soundness gaps, then collaboration, identity, scale and assurance, as numbered below.
+
+What this does not fix: a check that is slow the first time, and a gate that fails because the change is wrong.
+
+### Record of steps so far
 
 1. **Protected branches.** Done.
 2. **Thin pull requests.** Done. A pull request is a signed record naming a base and a head. An approval is a signed record bound to the exact tree it approved. The merge gate is one kernel decision: the required approvals and the required checks exist for this tree. Only what checks need to attach to; no discussion threads yet.
@@ -60,7 +96,7 @@ For a change that touches one file out of many, most checks are in the first cat
 9. **Scale and feel:** packs for transfer, large repositories, measured budgets, three browsers.
 10. **Assurance:** proofs carried in the holo, reproducible builds, kappa-registry accepting browser writes.
 
-Steps 2 to 4 are the product. If step 4's number is small, the plan is wrong and should change.
+Steps 2 to 4 are the product. If step 4's number is small, the plan is wrong and should change. On a larger codebase it was small, and the plan changed: see the order of work above.
 
 ## Open issues with LexLean and Prism, as met in this project
 
