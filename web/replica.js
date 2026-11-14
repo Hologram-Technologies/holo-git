@@ -103,7 +103,7 @@ export async function push(repo, branch, base, report = () => {}) {
   base = base.replace(/\/+$/, '');
   const ref = `refs/heads/${branch}`;
   const all = await listRefUpdates(repo.name);
-  const folded = await fold(all);
+  const folded = await fold(all, { strict: true });
   const branches = Object.keys(folded.heads);
   if (!branches.length) throw new Error('nothing to push: no change has been made to a branch yet');
   if (branches.length !== 1 || branches[0] !== ref) throw new Error('pushing a repository with changes on several branches is not supported yet');
@@ -186,6 +186,12 @@ export async function cloneReplica(base, name, state, report = () => {}) {
       queue.push(text.decode(content).match(/^object ([0-9a-f]{40})/m)[1]);
     }
   }
+  // Now that the history is here, the log is judged again with nothing left unchecked:
+  // a protected branch must be seen to have only moved forward.
+  // That needs every commit a protected branch passed through, including any that a later
+  // rewind left unreachable from the head.
+  await fetchMissing(base, folded.unverified, report);
+  await fold(logs, { strict: true });
   const head = refs[state.head] ? state.head : Object.keys(refs)[0];
   const repo = { name, url: base, head, objects: stored, bytes, cloned: Date.now(), replica: base };
   await putRepo(repo, refs);

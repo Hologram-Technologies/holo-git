@@ -63,3 +63,29 @@ export function decide({ signed, required, links, now }) {
   view.setBigUint64(59, BigInt(now));
   return ask(request) === 'allow';
 }
+
+// Operation 7, ref update: operation 6, and also whether the branch may move this way.
+// `fastForward` is the host's evidence that the branch only moved forward; `forceAllowed` is
+// false for a protected branch. The kernel proves: not forward and not allowed is a refusal,
+// whoever asks.
+export function refUpdate({ signed, required, links, now, fastForward, forceAllowed }) {
+  if (links.length > 5) return false;
+  const request = new Uint8Array(69);
+  const view = new DataView(request.buffer);
+  request[0] = 7;
+  request[1] = signed ? 1 : 0;
+  request[2] = required;
+  request[3] = MODE.owner;
+  for (let i = 0; i < 5; i += 1) {
+    const link = links[i] || { scope: MODE.owner, signed: true, revoked: false, notAfter: null };
+    const at = 4 + 11 * i;
+    request[at] = link.scope;
+    request[at + 1] = link.signed ? 1 : 0;
+    request[at + 2] = link.revoked ? 1 : 0;
+    view.setBigUint64(at + 3, link.notAfter == null ? 0xffffffffffffffffn : BigInt(link.notAfter));
+  }
+  view.setBigUint64(59, BigInt(now));
+  request[67] = fastForward === true ? 1 : 0;
+  request[68] = forceAllowed === true ? 1 : 0;
+  return ask(request) === 'allow';
+}

@@ -1,5 +1,6 @@
 // Signed records: the exact bytes that are signed, how a record is named, how it is verified.
-// Three kinds share one chain per repository: a ref update, a grant, and a revocation.
+// The kinds share one chain per repository: a ref update, a grant, a revocation, and the
+// protection of a branch or its removal.
 
 const utf8 = new TextEncoder();
 const text = new TextDecoder();
@@ -17,6 +18,8 @@ export function statement(r) {
   if (type === 'ref') fields = ['holo-git/ref-update/1', r.repo, r.ref, r.old, r.next, String(r.time), r.key, r.previous];
   else if (type === 'grant') fields = ['holo-git/grant/1', r.repo, r.subject, r.mode, String(r.notAfter), String(r.time), r.key, r.previous];
   else if (type === 'revoke') fields = ['holo-git/revoke/1', r.repo, r.subject, String(r.time), r.key, r.previous];
+  else if (type === 'protect') fields = ['holo-git/protect/1', r.repo, r.ref, r.minimum, String(r.time), r.key, r.previous];
+  else if (type === 'unprotect') fields = ['holo-git/unprotect/1', r.repo, r.ref, String(r.time), r.key, r.previous];
   else throw new Error('unknown record type');
   if (fields.some((field) => typeof field !== 'string' || /[\n\r]/.test(field))) throw new Error('a record field is missing or contains a line break');
   return utf8.encode(fields.join('\n'));

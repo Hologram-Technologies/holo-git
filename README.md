@@ -85,7 +85,6 @@ Checked by hand in the browser: a commit made in the page was exported as a bund
 Not done yet, and it matters:
 
 - The device key is the only identity. It is not bound to a passkey or a person, and it is not the kappa anchor form. Clearing site data destroys it.
-- Protected branches are not wired in.
 - The fast-forward check is in the host, not in the kernel.
 - One file per commit, text only, on an existing branch. No new branches, deletes, renames or merges.
 - The kernel guest is a committed build output. `scripts/build-web.sh` checks its SHA-256 against `scripts/kernel.sha256`, but the Pages build does not rebuild it from the model.
@@ -147,7 +146,7 @@ The owner of a repository can give another device's key read or write access, wi
 - A record signed for one repository is refused in another's log.
 - The Access panel on the Commits page shows this device's key, the grants, and the controls.
 
-Kernel guest: SHA-256 `dc90a15aa3b0253523b0479716ab60771c15b9036c143ad9755660ee215ae144`, from commit `c66750e`, run https://github.com/humuhumu33/holo-git/actions/runs/43543423604, holo fingerprint `blake3:134dd4275ece3d48060a5c7cfd4622469e4ef3ea3c340fa575aeedf0e4a470d9`, 26 of 26 acceptance vectors.
+The kernel guest now in the page is recorded under Protected branches.
 
 Checked by hand in the browser, with two keys standing in for two devices and the stand-in store between them:
 
@@ -167,6 +166,22 @@ Limits:
 - A grant names a device key, not a person. There is no key-to-identity binding yet.
 - Two people pushing at once: the second is told to fetch; see Fetch and merge.
 - The proofs cover the access rules. Assembling the request (reading the log, checking signatures, choosing which grant applies) is page code, tested by hand only.
+
+## Protected branches
+
+The owner can protect a branch. It then only moves forward, and only for those the rule names: anyone with write access, or the owner alone.
+
+- Proved in the kernel, for any evidence: a rewind of a protected branch is refused, whoever signs it, and an unsigned update never moves a ref. The owner is not exempt.
+- Protection and its removal are signed records in the log, like grants. Only the owner can issue them.
+- Whether a branch "only moved forward" is evidence the page computes by walking commit history. The kernel proves what follows from that evidence, not the evidence itself. Unknown is never treated as yes.
+- A clone judges the log twice: once to learn what to fetch, then strictly once the history is there. It also fetches commits a protected branch passed through that a later rewind left unreachable, so that every protected move can be checked.
+- An unprotected branch can be rewound by anyone with write access, as in git. A test records this.
+
+Kernel guest: SHA-256 `62c92fc7785d663a24833f172ae6c130f214a40aa0ae388db7bbed6a750b5881`, from commit `cf72707`, run https://github.com/humuhumu33/holo-git/actions/runs/43550335794, holo fingerprint `blake3:0b299948f9510dc2821d030a4b5eea6b44972247fc93c23ddb3cd6b56c6081e3`, 34 of 34 acceptance vectors. The model has 29 theorems in 14 modules.
+
+Tested in `test/protect.test.mjs`, ten tests: only the owner can protect or unprotect; a writer still moves a protected branch forward; a rewind signed by a key with write access and written straight to the store is refused by every clone; the owner cannot rewind either; a merge counts as moving forward; an owner-only branch refuses a writer; removal restores access.
+
+Not done: required approvals and required checks, which need pull requests; protected tags; patterns such as `release/*`; and deleting a branch, which does not exist at all yet.
 
 ## Fetch and merge
 
@@ -207,7 +222,7 @@ Tested: the engine's marked output is byte for byte what `git merge-file` prints
 Every push runs two suites before anything is deployed. A failure stops the deploy.
 
 - `engine/tests`: fourteen tests of the engine against git (objects, packs, deltas, diff, blame, merge, written objects, packs and bundles).
-- `test/page.test.mjs`, `test/merge.test.mjs` and `test/s3.test.mjs`: thirty tests of the page's own modules (four of them against a real S3-compatible store), run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
+- `test/page.test.mjs`, `test/merge.test.mjs`, `test/s3.test.mjs` and `test/protect.test.mjs`: forty tests of the page's own modules (four of them against a real S3-compatible store), run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
 
 What the page tests cover: clone matches git object for object; history, changed paths and line counts match `git show --numstat`; blame matches `git blame`; altered stored bytes are refused; a commit made here is pulled and `fsck`ed by git; push sends only what is missing and git accepts what the replica holds; a tampered object, log record or head is refused; grant, use, escalation, revocation and expiry between two devices; a validly signed forgery written straight to the store; a broken chain and a record from another repository.
 
@@ -229,4 +244,5 @@ npm ci && npm test
 - `docs/ARCHITECTURE.md`: the design.
 - `docs/PARITY.md`: every Gitea feature and its status here.
 - `docs/THREAT-MODEL.md`: what is defended and what is not.
+- `docs/ROADMAP.md`: what comes next and why, and the open issues met with LexLean and Prism.
 - `docs/PROMPT.md`: the original brief. Where it disagrees with the study, the study is right.

@@ -4,7 +4,7 @@ import { loadEngine, open, diffLines, blameLines, splitLines } from './engine.js
 import { openStore, getObject, getRepo, getRefs, listRepos, countObjects, stats, corruptObject, setRepo } from './store.js';
 import { startShell } from './shell.js';
 import { loadKernel, decisions } from './kernel.js';
-import { checkLog, deviceKey, grant, revoke } from './identity.js';
+import { checkLog, deviceKey, grant, revoke, protect, unprotect } from './identity.js';
 import { push, setCredentials, hasCredentials } from './replica.js';
 import { fetchFrom } from './sync.js';
 import { clone, resolveCommit, readTree, lookup, history, changedPaths, person, fileVersions, commitFile, bundleOf } from './git.js';
@@ -274,7 +274,7 @@ async function resolvePage(repo, refs, ref) {
     el('h2', {}, `${result.details.length} conflict${result.details.length === 1 ? '' : 's'} to resolve`), form, note);
 }
 
-async function accessTools(repo, log) {
+async function accessTools(repo, log, branch) {
   const key = await deviceKey();
   const mine = el('input', { type: 'text', readonly: '', 'aria-label': 'This device\'s key', value: key.id });
   const state = log.valid ? log.state : null;
@@ -299,8 +299,18 @@ async function accessTools(repo, log) {
     event.preventDefault();
     try { await grant(repo.name, subject.value, mode.value, Number(days.value) || 0); rerender(); } catch (error) { note.textContent = ` ${error.message}`; }
   } }, subject, mode, days, el('button', {}, 'Grant'), note);
+  const refName = `refs/heads/${branch}`;
+  const rule = state && state.protections.get(refName);
+  const who = el('select', { 'aria-label': 'Who may change the protected branch' },
+    el('option', { value: 'write' }, 'anyone with write access'), el('option', { value: 'admin' }, 'the owner only'));
+  if (rule) who.value = rule.minimum;
+  const guard = el('p', { class: 'push' },
+    el('span', {}, rule ? `${branch} is protected: it only moves forward, for ${rule.minimum === 'admin' ? 'the owner only' : 'anyone with write access'}.` : `${branch} is not protected: anyone with write access can rewind it.`),
+    who,
+    el('button', { onclick: async () => { try { await protect(repo.name, branch, who.value); rerender(); } catch (error) { note.textContent = ` ${error.message}`; } } }, rule ? 'Change' : 'Protect'),
+    rule ? el('button', { onclick: async () => { try { await unprotect(repo.name, branch); rerender(); } catch (error) { note.textContent = ` ${error.message}`; } } }, 'Remove protection') : '');
   return el('details', { class: 'access' }, el('summary', {}, 'Access'),
-    el('p', {}, role), el('p', { class: 'push' }, el('span', { class: 'muted' }, 'This device\'s key:'), mine),
+    el('p', {}, role), guard, el('p', { class: 'push' }, el('span', { class: 'muted' }, 'This device\'s key:'), mine),
     rows.length ? el('table', { class: 'files' }, rows) : '', form,
     el('p', { class: 'muted' }, 'A grant or revocation is a signed record. It takes effect for others once pushed.'));
 }
@@ -371,7 +381,7 @@ async function branchTools(repo, refs, ref) {
     el('p', { class: log.valid ? '' : 'error' }, state, ' ', button, note),
     el('p', { class: 'push' }, address, fetchButton, pushButton, pushNote),
     keys,
-    await accessTools(repo, log));
+    await accessTools(repo, log, ref));
 }
 
 async function commitPage(repo, refs, id) {

@@ -139,7 +139,9 @@ export async function fetchFrom(repo, branch, base, who = {}, report = () => {},
   if (shared === remote.length && shared === local.length) return { outcome: 'up to date', head: remoteHead };
   if (shared === remote.length) return { outcome: 'ahead', head: (await getRefs(repo.name))[ref], unpushed: local.length - shared };
 
-  const fetched = await fetchMissing(base, [remoteHead], report);
+  // The head's history, and any commit a protected branch passed through that is no longer reachable from it.
+  const fetched = await fetchMissing(base, [remoteHead, ...remoteState.unverified], report);
+  await fold(remote, { strict: true }); // with the history here, nothing about a protected branch is left unchecked
   const localHead = (await getRefs(repo.name))[ref];
   const extra = local.slice(shared);
   if (!local.length && localHead !== remoteHead && !(await ancestors(remoteHead)).has(localHead)) {
@@ -153,8 +155,9 @@ export async function fetchFrom(repo, branch, base, who = {}, report = () => {},
   // Both sides moved. Re-issue this device's unpushed records on top of the replica's log.
   const key = await deviceKey();
   if (extra.some((record) => record.key !== key.id)) throw new Error('refused: unpushed records here were signed by another device');
+  // Everything this device signed that is not a change to a branch is issued again as it was.
   const steps = extra.filter((record) => (record.type || 'ref') !== 'ref')
-    .map(({ type, subject, mode, notAfter }) => (type === 'grant' ? { type, subject, mode, notAfter } : { type, subject }));
+    .map(({ repo: _repo, time: _time, key: _key, publicKey: _publicKey, previous: _previous, signature: _signature, ...fields }) => fields);
   const changed = extra.some((record) => (record.type || 'ref') === 'ref');
   let head = remoteHead;
   let outcome = 'fast-forward';

@@ -1,7 +1,7 @@
 // A signing key that never leaves this device, and the records it signs.
 // The key is ECDSA P-256, generated in the browser as non-extractable.
 
-import { fold, GRANTABLE } from './log.js';
+import { fold, GRANTABLE, PUSHERS } from './log.js';
 import { statement, sha256, b64, ECDSA, SIGN } from './records.js';
 import { loadKey, saveKey, appendRefUpdate, appendRecord, listRefUpdates } from './store.js';
 
@@ -23,7 +23,7 @@ async function signOn(log, repo, fields) {
   // The log keeps the name it was started under, whatever this clone is called locally.
   const record = { ...fields, repo: log.length ? log[0].repo : repo, time: Date.now(), key: key.id, publicKey: key.publicKey, previous: before.digest };
   record.signature = b64(await crypto.subtle.sign(SIGN, key.pair.privateKey, statement(record)));
-  await fold([...log, record]);
+  await fold([...log, record], { strict: true });
   return record;
 }
 
@@ -69,4 +69,19 @@ export async function checkLog(repo) {
   } catch (error) {
     return { entries: log.length, valid: false, reason: error.message };
   }
+}
+
+// Protect a branch: it can then only move forward, and only for those `minimum` names
+// ('write': anyone with write access; 'admin': the owner alone).
+export async function protect(repo, branch, minimum) {
+  if (!PUSHERS.includes(minimum)) throw new Error('a protected branch is open to writers or to the owner only');
+  const record = await sign(repo, { type: 'protect', ref: `refs/heads/${branch}`, minimum });
+  await appendRecord(repo, record);
+  return record;
+}
+
+export async function unprotect(repo, branch) {
+  const record = await sign(repo, { type: 'unprotect', ref: `refs/heads/${branch}` });
+  await appendRecord(repo, record);
+  return record;
 }
