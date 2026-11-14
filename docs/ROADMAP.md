@@ -20,6 +20,15 @@ These are waits measured in this project, not estimates. They are the problem in
 
 None of these waits is the first time a piece of work is done. Every one is work being done again, or a queue.
 
+## What went wrong on the way
+
+Recorded because each of these is the kind of failure this project exists to prevent.
+
+- For four pushes, this repository's CI did not fail when a check failed. The workflow read its exit status after a later command had replaced it. No check failed in that window, so nothing wrong was deployed, but nothing would have stopped it. Found by reading a summary that said "1 failing" above a green tick.
+- The first isolated run of the checks failed because of a path-length limit on the development machine, and the failures were stored as results. A machine's failure and the content's failure look the same to a cache.
+- A check with a stored pass was reported as failing where its environment variables were absent, because the variables were looked for before the result.
+- A kernel binary was committed corrupted, because the repository's line-ending rule treated it as text. The build's digest check would have refused it.
+
 ## What "faster" can honestly mean
 
 Doing a piece of work for the first time will not get faster here: Lean proves at Lean's speed, a compiler compiles at its speed.
