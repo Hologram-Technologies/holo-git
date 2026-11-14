@@ -1,0 +1,67 @@
+# Content-keyed checks for any repository.
+#
+# Put a .holo/checks.json in a repository, call this action, and a check runs only when the
+# content it reads has no result yet. A change that touches nothing a check reads runs nothing.
+# See "Use it in any GitHub repository" in the README for the definitions format and its limits.
+name: Content-keyed checks
+description: Run the checks in .holo/checks.json that have no result for the content being built.
+
+inputs:
+  checks:
+    description: Names of the checks to run, separated by spaces. Empty means every check defined.
+    default: ''
+  run:
+    description: "'false' only reports which checks have no result, without running anything."
+    default: 'true'
+  strict:
+    description: "'true' fails the job when a check cannot run on this machine. 'false' skips it."
+    default: 'true'
+  cache:
+    description: "'false' when an earlier step in the same job already restored the results."
+    default: 'true'
+
+outputs:
+  missing:
+    description: Names of the checks with no result for this content, separated by spaces.
+    value: ${{ steps.plan.outputs.missing }}
+
+runs:
+  using: composite
+  steps:
+    # Results are files named by action key. GitHub keeps them between runs; each run saves under
+    # a new name and restores the most recent one, so results accumulate.
+    - name: Bring back earlier check results
+      if: inputs.cache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: .holo/results
+        key: holo-results-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}
+        restore-keys: holo-results-${{ runner.os }}-
+    - name: See which checks have no result for this content
+      id: plan
+      shell: bash
+      run: |
+        node "$GITHUB_ACTION_PATH/../../../scripts/check.mjs" keys | tee "$RUNNER_TEMP/holo-keys.log"
+        echo "missing=$(grep '  no result$' "$RUNNER_TEMP/holo-keys.log" | awk '{print $2}' | tr '\n' ' ')" >>"$GITHUB_OUTPUT"
+    - name: Run the checks that have no result
+      if: inputs.run == 'true'
+      shell: bash
+      env:
+        HOLO_CHECKS: ${{ inputs.checks }}
+        HOLO_STRICT: ${{ inputs.strict }}
+      run: |
+        set -o pipefail
+        flags=''
+        if [ "$HOLO_STRICT" = 'true' ]; then flags='--strict'; fi
+        # The status must be taken here: a later command would replace it.
+        status=0
+        # shellcheck disable=SC2086
+        node "$GITHUB_ACTION_PATH/../../../scripts/check.mjs" run $flags $HOLO_CHECKS | tee "$RUNNER_TEMP/holo-checks.log" || status=$?
+        {
+          echo '## Checks'
+          echo
+          echo '```'
+          grep -E '^[a-z0-9][a-z0-9-]*: (pass|fail|cannot|not defined|running|note)|^[0-9]+ checks?:' "$RUNNER_TEMP/holo-checks.log" || true
+          echo '```'
+        } >>"$GITHUB_STEP_SUMMARY"
+        exit "$status"

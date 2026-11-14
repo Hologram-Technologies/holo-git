@@ -167,6 +167,63 @@ Limits:
 - Two people pushing at once: the second is told to fetch; see Fetch and merge.
 - The proofs cover the access rules. Assembling the request (reading the log, checking signatures, choosing which grant applies) is page code, tested by hand only.
 
+## Use it in any GitHub repository
+
+The checks do not need holo-git's hosting. They work in an ordinary GitHub repository today, in front of whatever its CI already runs.
+
+1. Add `.holo/checks.json` to the repository. One entry per check:
+
+   ```json
+   {
+     "checks": [
+       {
+         "name": "proofs",
+         "run": "lake build",
+         "inputs": ["src", "lakefile.toml", "lean-toolchain", "lake-manifest.json"],
+         "tools": [{ "run": "lake --version", "expect": "Lake version 5." }],
+         "keep": [".lake"]
+       },
+       {
+         "name": "docs",
+         "run": "npm ci && npm run build",
+         "cwd": "site",
+         "inputs": ["site"],
+         "tools": [{ "run": "node --version", "expect": "v22." }]
+       }
+     ]
+   }
+   ```
+
+   - `inputs`: every path the check reads. List directories. A path left out is not present when the check runs, so a missing one shows up as a failure, not as a wrong reuse.
+   - `tools`: commands that print a version, and how that output must start. Optional, but without it a result made with one version is reused under another. The values above are examples; run each command and copy the start of what your tool actually prints.
+   - `env`: names of environment variables the check needs. Anything not named is withheld from it.
+   - `keep`: directories kept between runs for speed, such as build output.
+
+2. Call the action from a workflow, after checking out with history and installing the tools:
+
+   ```yaml
+   - uses: actions/checkout@v4
+   - uses: actions/setup-node@v4
+     with:
+       node-version: 22
+   - uses: humuhumu33/holo-git/.github/actions/checks@<commit>
+   ```
+
+   Pin `<commit>` to a full commit identifier of this repository, not a branch name.
+
+3. Mark the job as a required status check, as usual.
+
+What changes: a push or pull request that touches nothing a check reads runs nothing for that check. A pull request brought up to date with its base, where the merged content was already checked, runs nothing. A revert to content that passed runs nothing.
+
+Try it before committing to it: `node scripts/check.mjs history --last 200` in a checkout with a `.holo/checks.json` replays the last 200 commits and reports how many check runs reuse would have avoided. That number, on your repository, is the honest estimate of what this is worth to you.
+
+Limits specific to GitHub:
+
+- Results are kept in GitHub's Actions cache. A pull request can read results saved on its base branch, but the base branch cannot read results saved by a pull request. So the first push to `main` after a merge runs the affected checks once more, even though the same content was just checked on the pull request.
+- The cache is evicted after a week without use and when a repository's cache is full.
+- Results made on a developer's machine are not shared with CI. A shared, signed store of results would let a push arrive already checked; it does not exist yet.
+- Everything under "What remains open" above applies: this is not a sandbox, and a failure caused by the runner is cached like any other until the content changes or the cache is cleared.
+
 ## Self-hosting: what has been done, and what has not
 
 On 2026-11-14 this repository was developed through itself for three changes, on one machine.
