@@ -37,13 +37,15 @@ outputs:
 runs:
   using: composite
   steps:
-    # Results are files named by action key. GitHub keeps them between runs; each run saves under
+    # Results are files named by action key; what checks produced is kept beside them, by digest. GitHub keeps them between runs; each run saves under
     # a new name and restores the most recent one, so results accumulate.
     - name: Bring back earlier check results
       if: inputs.cache == 'true'
       uses: actions/cache@v4
       with:
-        path: .holo/results
+        path: |
+          .holo/results
+          .holo/outputs
         key: holo-results-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}
         restore-keys: holo-results-${{ runner.os }}-
     - name: See which checks have no result for this content

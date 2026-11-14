@@ -18,10 +18,29 @@
       ]
     },
     {
-      "name": "page",
-      "run": "sh scripts/build-engine.sh && npm ci --no-audit --no-fund && npm test",
+      "name": "wasm",
+      "run": "sh scripts/build-engine.sh",
       "inputs": [
         "engine",
+        "scripts/build-engine.sh"
+      ],
+      "outputs": [
+        "web/engine.wasm"
+      ],
+      "tools": [
+        {
+          "run": "cargo --version",
+          "expect": "cargo 1."
+        }
+      ],
+      "keep": [
+        "engine/target"
+      ]
+    },
+    {
+      "name": "page",
+      "run": "npm ci --no-audit --no-fund && npm test",
+      "inputs": [
         "web",
         "test",
         "scripts",
@@ -29,10 +48,6 @@
         "package-lock.json"
       ],
       "tools": [
-        {
-          "run": "cargo --version",
-          "expect": "cargo 1."
-        },
         {
           "run": "node --version",
           "expect": "v22."
@@ -43,15 +58,16 @@
         }
       ],
       "keep": [
-        "engine/target",
         "node_modules"
+      ],
+      "uses": [
+        "wasm"
       ]
     },
     {
       "name": "store",
-      "run": "sh scripts/build-engine.sh && npm ci --no-audit --no-fund && node --test test/s3.test.mjs",
+      "run": "npm ci --no-audit --no-fund && node --test test/s3.test.mjs",
       "inputs": [
-        "engine",
         "web",
         "test",
         "scripts",
@@ -59,10 +75,6 @@
         "package-lock.json"
       ],
       "tools": [
-        {
-          "run": "cargo --version",
-          "expect": "cargo 1."
-        },
         {
           "run": "node --version",
           "expect": "v22."
@@ -78,8 +90,10 @@
         "S3_TEST_SECRET_KEY"
       ],
       "keep": [
-        "engine/target",
         "node_modules"
+      ],
+      "uses": [
+        "wasm"
       ]
     },
     {
