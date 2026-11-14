@@ -1,0 +1,16 @@
+\begin{lexlean}{AddressProofs}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\useglossary{prism.arch@1.0.0}
+\importmodule{Address}
+\title{Text application model}
+\begin{semanticmodule}
+theorem{
+  name: restore_decides,
+  parameters: [claimed : Address::Label, observed : Address::Label],
+  statement: (((Address::restoreDecision claimed observed) = true) <-> (Address::SameLabel claimed observed)),
+  proof: simplify{definitions: [Bool.and_eq_true, Nat.beq_eq, Address::SameLabel, Address::restoreDecision]},
+  axioms: [propext]
+}
+\end{semanticmodule}
+\end{lexlean}

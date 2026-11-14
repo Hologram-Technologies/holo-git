@@ -34,13 +34,5 @@ definition{
   result: Prop,
   body: (((project claimed axis) = (project observed axis)) /\ (((project claimed w0) = (project observed w0)) /\ (((project claimed w1) = (project observed w1)) /\ (((project claimed w2) = (project observed w2)) /\ (((project claimed w3) = (project observed w3)) /\ (((project claimed w4) = (project observed w4)) /\ (((project claimed w5) = (project observed w5)) /\ (((project claimed w6) = (project observed w6)) /\ ((project claimed w7) = (project observed w7))))))))))
 }
-
-theorem{
-  name: restore_decides,
-  parameters: [claimed : Label, observed : Label],
-  statement: (((restoreDecision claimed observed) = true) <-> (SameLabel claimed observed)),
-  proof: simplify{definitions: [Bool.and_eq_true, Nat.beq_eq, SameLabel, restoreDecision]},
-  axioms: [propext]
-}
 \end{semanticmodule}
 \end{lexlean}

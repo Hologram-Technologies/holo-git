@@ -13,23 +13,21 @@ definition{
 }
 
 definition{
-  name: narrowBy,
-  parameters: [held : Access::AccessMode, scope : Access::AccessMode, signed : Access::Flag, revoked : Access::Flag, live : Access::Flag],
-  result: Access::AccessMode,
+  name: signedAndKept,
+  parameters: [signed : Access::Flag, revoked : Access::Flag],
+  result: Access::Flag,
   body: (match revoked
-    | Access::Flag.yes => (ctor Access::AccessMode.none)
-    | Access::Flag.no => (match signed
-      | Access::Flag.no => (ctor Access::AccessMode.none)
-      | Access::Flag.yes => (match live
-        | Access::Flag.no => (ctor Access::AccessMode.none)
-        | Access::Flag.yes => (minMode held scope))))
+    | Access::Flag.yes => (ctor Access::Flag.no)
+    | Access::Flag.no => signed)
 }
 
 definition{
-  name: liveRank,
-  parameters: [notAfter : Nat, now : Nat],
+  name: flagRank,
+  parameters: [flag : Access::Flag],
   result: Nat,
-  body: (if (now <=? notAfter) then 1 else 0)
+  body: (match flag
+    | Access::Flag.no => 0
+    | Access::Flag.yes => 1)
 }
 
 definition{
@@ -40,10 +38,49 @@ definition{
 }
 
 definition{
-  name: narrow,
-  parameters: [held : Access::AccessMode, scope : Access::AccessMode, signed : Access::Flag, revoked : Access::Flag, notAfter : Nat, now : Nat],
+  name: linkRank,
+  parameters: [signed : Access::Flag, revoked : Access::Flag, notAfter : Nat, now : Nat],
+  result: Nat,
+  body: (if (notAfter <? now) then 0 else (flagRank (signedAndKept signed revoked)))
+}
+
+definition{
+  name: linkValid,
+  parameters: [signed : Access::Flag, revoked : Access::Flag, notAfter : Nat, now : Nat],
+  result: Access::Flag,
+  body: (flagOf (linkRank signed revoked notAfter now))
+}
+
+definition{
+  name: both,
+  parameters: [head : Access::Flag, rest : Access::Flag],
+  result: Access::Flag,
+  body: (match head
+    | Access::Flag.no => (ctor Access::Flag.no)
+    | Access::Flag.yes => rest)
+}
+
+definition{
+  name: chain5,
+  parameters: [v1 : Access::Flag, v2 : Access::Flag, v3 : Access::Flag, v4 : Access::Flag, v5 : Access::Flag],
+  result: Access::Flag,
+  body: (both v1 (both v2 (both v3 (both v4 v5))))
+}
+
+definition{
+  name: cap5,
+  parameters: [s1 : Access::AccessMode, s2 : Access::AccessMode, s3 : Access::AccessMode, s4 : Access::AccessMode, s5 : Access::AccessMode],
   result: Access::AccessMode,
-  body: (narrowBy held scope signed revoked (flagOf (liveRank notAfter now)))
+  body: (minMode s1 (minMode s2 (minMode s3 (minMode s4 s5))))
+}
+
+definition{
+  name: effective,
+  parameters: [held : Access::AccessMode, cap : Access::AccessMode, valid : Access::Flag],
+  result: Access::AccessMode,
+  body: (match valid
+    | Access::Flag.no => (ctor Access::AccessMode.none)
+    | Access::Flag.yes => (minMode held cap))
 }
 \end{semanticmodule}
 \end{lexlean}
