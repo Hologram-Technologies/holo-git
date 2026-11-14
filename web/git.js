@@ -1,7 +1,8 @@
 // Cloning from a static replica and reading history. No server-side git is involved:
 // the replica only has to serve files (git's "dumb" HTTP layout).
 
-import { readPack, readLoose, parseCommit, parseTree, open } from './engine.js';
+import { readPack, readLoose, parseCommit, parseTree, open, makeObject, makeTree, makeCommit, makeBundle } from './engine.js';
+import { moveRef } from './identity.js';
 import { putObjects, hasObject, getObject, putRepo } from './store.js';
 
 const text = new TextDecoder();
@@ -170,4 +171,81 @@ export async function fileVersions(startId, path, limit = 200) {
     walked += 1;
   }
   return { versions, walked, complete: !id || versions.length < limit };
+}
+
+const clean = (value) => value.replace(/[<>\n\r\0]/g, '').trim();
+
+function identityLine(name, email, time) {
+  const offset = -new Date(time).getTimezoneOffset();
+  const zone = `${offset < 0 ? '-' : '+'}${String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0')}${String(Math.abs(offset) % 60).padStart(2, '0')}`;
+  return `${clean(name)} <${clean(email)}> ${Math.floor(time / 1000)} ${zone}`;
+}
+
+// Replace or add one file under a tree, rebuilding only the trees on its path.
+// Every other subtree is reused by its identifier, unread.
+async function rewrite(treeId, parts, blobId, made) {
+  const entries = treeId ? await readTree(treeId) : [];
+  if (entries.some((entry) => entry.name.includes('�'))) throw new Error('this directory has a file name that is not UTF-8; editing it is not supported yet');
+  const [name, ...rest] = parts;
+  const existing = entries.find((entry) => entry.name === name);
+  let entry;
+  if (rest.length === 0) {
+    if (existing && existing.mode === '40000') throw new Error(`${name} is a directory`);
+    entry = { mode: existing ? existing.mode : '100644', name, id: blobId };
+  } else {
+    if (existing && existing.mode !== '40000') throw new Error(`${name} is a file`);
+    entry = { mode: '40000', name, id: await rewrite(existing ? existing.id : null, rest, blobId, made) };
+  }
+  const tree = makeTree([...entries.filter((e) => e.name !== name), entry]);
+  made.push(tree);
+  return tree.id;
+}
+
+// Commit one file change to a branch on this device.
+export async function commitFile({ repo, refs, branch, path, content, message, name, email }) {
+  const ref = `refs/heads/${branch}`;
+  const old = refs[ref];
+  if (!old) throw new Error(`${branch} is not a branch`);
+  if (!clean(name) || !clean(email)) throw new Error('a name and an email are needed to commit');
+  if (!message.trim()) throw new Error('a commit message is needed');
+  const parent = parseCommit(await getObject(old));
+  const blob = makeObject('blob', content);
+  const made = [blob];
+  const tree = await rewrite(parent.tree, path.split('/').filter(Boolean), blob.id, made);
+  if (tree === parent.tree) throw new Error('nothing changed');
+  const who = identityLine(name, email, Date.now());
+  const commit = makeCommit({ tree, parents: [old], author: who, committer: who, message: `${message.trim()}\n` });
+  made.push(commit);
+  await putObjects(made);
+  await moveRef({ repo: repo.name, ref, old, next: commit.id, parents: [old] });
+  return { id: commit.id, objects: made.length };
+}
+
+// Every object a commit needs, each read through the store and so re-verified.
+export async function reachable(startId) {
+  const envelopes = [];
+  const seen = new Set();
+  const queue = [startId];
+  while (queue.length) {
+    const id = queue.pop();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const envelope = await getObject(id);
+    envelopes.push(envelope);
+    const { kind } = open(envelope);
+    if (kind === 'commit') {
+      const commit = parseCommit(envelope);
+      queue.push(commit.tree, ...commit.parents);
+    } else if (kind === 'tree') {
+      for (const entry of parseTree(envelope)) if (entry.mode !== '160000') queue.push(entry.id);
+    }
+  }
+  return envelopes;
+}
+
+export async function bundleOf(refs, branch) {
+  const id = refs[`refs/heads/${branch}`];
+  if (!id) throw new Error(`${branch} is not a branch`);
+  const envelopes = await reachable(id);
+  return { bytes: makeBundle(`refs/heads/${branch}`, id, envelopes), objects: envelopes.length, id };
 }

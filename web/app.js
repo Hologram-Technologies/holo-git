@@ -3,7 +3,9 @@
 import { loadEngine, open, diffLines, blameLines, splitLines } from './engine.js';
 import { openStore, getObject, getRepo, getRefs, listRepos, countObjects, stats, corruptObject } from './store.js';
 import { startShell } from './shell.js';
-import { clone, resolveCommit, readTree, lookup, history, changedPaths, person, fileVersions } from './git.js';
+import { loadKernel, decisions } from './kernel.js';
+import { checkLog } from './identity.js';
+import { clone, resolveCommit, readTree, lookup, history, changedPaths, person, fileVersions, commitFile, bundleOf } from './git.js';
 
 const main = document.getElementById('main');
 const status = document.getElementById('status');
@@ -28,7 +30,7 @@ const subject = (message) => message.split('\n')[0];
 
 async function showStatus() {
   const total = await countObjects();
-  status.textContent = `${total} objects stored · ${stats.read} read this session, each re-verified` +
+  status.textContent = `${total} objects stored · ${stats.read} read this session, each re-verified · ${decisions.asked} decisions by the proved kernel` +
     (stats.refused ? ` · ${stats.refused} REFUSED` : '');
   status.className = stats.refused ? 'status refused' : 'status';
 }
@@ -119,13 +121,14 @@ async function blob(repo, refs, ref, path) {
   if (node.kind === 'tree') return tree(repo, refs, ref, path);
   const { content } = open(await getObject(node.id));
   main.replaceChildren(header(repo, refs, ref, 'code'), crumbs(repo, ref, path, 'blob'),
-    el('p', { class: 'muted mono' }, `sha1:${node.id} · ${content.length} bytes · `, link(`#/${repo.name}/blame/${enc(ref)}/${path}`, 'Blame')), blobView(content));
+    el('p', { class: 'muted mono' }, `sha1:${node.id} · ${content.length} bytes · `, link(`#/${repo.name}/blame/${enc(ref)}/${path}`, 'Blame'),
+      refs[`refs/heads/${ref}`] ? [' · ', link(`#/${repo.name}/edit/${enc(ref)}/${path}`, 'Edit')] : ''), blobView(content));
 }
 
 async function commits(repo, refs, ref) {
   const { id } = await resolveCommit(refs, ref);
   const list = await history(id, 100);
-  main.replaceChildren(header(repo, refs, ref, 'commits'),
+  main.replaceChildren(header(repo, refs, ref, 'commits'), await branchTools(repo, refs, ref),
     el('table', { class: 'files' }, list.map(({ id: commitId, commit }) => {
       const author = person(commit.author);
       return el('tr', {},
@@ -202,6 +205,57 @@ async function blamePage(repo, refs, ref, path) {
     el('table', { class: 'code blame' }, rows));
 }
 
+const saved = (key) => { try { return localStorage.getItem(key) || ''; } catch { return ''; } };
+const remember = (key, value) => { try { localStorage.setItem(key, value); } catch { /* storage unavailable */ } };
+
+async function editPage(repo, refs, ref, path) {
+  if (!refs[`refs/heads/${ref}`]) throw new Error('Only a branch can be edited.');
+  const { commit } = await resolveCommit(refs, ref);
+  const node = await lookup(commit.tree, path);
+  if (node.kind !== 'blob') throw new Error(`${path} is a directory.`);
+  const { content } = open(await getObject(node.id));
+  if (isBinary(content)) throw new Error(`${path} is a binary file.`);
+  const area = el('textarea', { 'aria-label': 'File content', spellcheck: 'false', rows: '24' });
+  area.value = text.decode(content);
+  const message = el('input', { type: 'text', 'aria-label': 'Commit message', placeholder: `Update ${path.split('/').pop()}` });
+  const name = el('input', { type: 'text', 'aria-label': 'Your name', placeholder: 'Your name', value: saved('holo-git-name') });
+  const email = el('input', { type: 'email', 'aria-label': 'Your email', placeholder: 'you@example.org', value: saved('holo-git-email') });
+  const note = el('p', { class: 'muted' }, 'The commit is made on this device and signed with this device\'s key. Nothing is sent anywhere.');
+  const form = el('form', { class: 'edit', onsubmit: async (event) => {
+    event.preventDefault();
+    try {
+      remember('holo-git-name', name.value);
+      remember('holo-git-email', email.value);
+      const made = await commitFile({ repo, refs, branch: ref, path, content: new TextEncoder().encode(area.value),
+        message: message.value || message.getAttribute('placeholder'), name: name.value, email: email.value });
+      location.hash = `#/${repo.name}/commit/${made.id}`;
+    } catch (error) { note.textContent = error.message; note.className = 'error'; }
+  } }, area, message, name, email, el('button', {}, `Commit to ${ref}`));
+  main.replaceChildren(header(repo, refs, ref, 'code'), crumbs(repo, ref, path, 'blob'), form, note);
+}
+
+async function branchTools(repo, refs, ref) {
+  if (!refs[`refs/heads/${ref}`]) return '';
+  const log = await checkLog(repo.name);
+  const note = el('span', { class: 'muted' });
+  const button = el('button', { onclick: async () => {
+    try {
+      const bundle = await bundleOf(refs, ref);
+      const url = URL.createObjectURL(new Blob([bundle.bytes], { type: 'application/octet-stream' }));
+      const anchor = el('a', { href: url, download: `${repo.name}-${ref}.bundle` });
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      note.textContent = ` ${bundle.objects} objects, ${bundle.bytes.length} bytes. Fetch it with: git pull ${repo.name}-${ref}.bundle ${ref}`;
+    } catch (error) { note.textContent = ` ${error.message}`; }
+  } }, 'Download as git bundle');
+  const state = log.entries === 0 ? 'No changes made on this device.'
+    : log.valid ? `${log.entries} change${log.entries === 1 ? '' : 's'} made on this device, each signed, signatures and chain verified.`
+      : 'The log of changes made on this device does NOT verify.';
+  return el('p', { class: log.valid ? 'tools' : 'tools error' }, state, ' ', button, note);
+}
+
 async function commitPage(repo, refs, id) {
   const { commit } = await resolveCommit(refs, id);
   const author = person(commit.author);
@@ -239,6 +293,7 @@ async function route() {
       else if (view === 'commits') await commits(repo, refs, target);
       else if (view === 'commit') await commitPage(repo, refs, target);
       else if (view === 'blame') await blamePage(repo, refs, target, path);
+      else if (view === 'edit') await editPage(repo, refs, target, path);
       else await tree(repo, refs, target, path);
     }
   } catch (error) {
@@ -248,8 +303,9 @@ async function route() {
 }
 
 await loadEngine();
+await loadKernel();
 await openStore();
-window.holoGit = { corruptObject, stats };
+window.holoGit = { corruptObject, stats, decisions, bundleOf, getRefs };
 window.addEventListener('hashchange', route);
 startShell(document.getElementById('shell'));
 await route();

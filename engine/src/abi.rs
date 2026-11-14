@@ -162,6 +162,73 @@ pub unsafe extern "C" fn eng_blame(pointer: *const u8, length: usize) -> *mut u8
     reply(buffers(input(pointer, length)).map(|parts| blame(&parts).into_iter().flat_map(u32::to_le_bytes).collect()))
 }
 
+fn id_of(bytes: &[u8]) -> Result<crate::Id, Error> {
+    bytes.try_into().map_err(|_| Error::BadObject)
+}
+
+/// Buffers `[kind name, content]` in; `[id: 20][envelope]` out.
+///
+/// # Safety
+/// `pointer..pointer+length` must be readable.
+#[no_mangle]
+pub unsafe extern "C" fn eng_envelope(pointer: *const u8, length: usize) -> *mut u8 {
+    reply(buffers(input(pointer, length)).and_then(|parts| {
+        let [name, content] = parts[..] else { return Err(Error::Truncated) };
+        let kind = crate::Kind::from_name(name).ok_or(Error::BadObject)?;
+        let envelope = crate::write::envelope(kind, content);
+        let mut out = sha1(&envelope).to_vec();
+        out.extend_from_slice(&envelope);
+        Ok(out)
+    }))
+}
+
+/// Buffers `[mode, name, id]` repeated in; tree content out, in git's order.
+///
+/// # Safety
+/// `pointer..pointer+length` must be readable.
+#[no_mangle]
+pub unsafe extern "C" fn eng_tree_build(pointer: *const u8, length: usize) -> *mut u8 {
+    reply(buffers(input(pointer, length)).and_then(|parts| {
+        if parts.len() % 3 != 0 {
+            return Err(Error::Truncated);
+        }
+        let mut entries = Vec::with_capacity(parts.len() / 3);
+        for chunk in parts.chunks(3) {
+            entries.push(crate::write::NewEntry { mode: chunk[0], name: chunk[1], id: id_of(chunk[2])? });
+        }
+        crate::write::build_tree(entries)
+    }))
+}
+
+/// Buffers `[tree, author, committer, message, parent...]` in; commit content out.
+///
+/// # Safety
+/// `pointer..pointer+length` must be readable.
+#[no_mangle]
+pub unsafe extern "C" fn eng_commit_build(pointer: *const u8, length: usize) -> *mut u8 {
+    reply(buffers(input(pointer, length)).and_then(|parts| {
+        if parts.len() < 4 {
+            return Err(Error::Truncated);
+        }
+        crate::write::build_commit(parts[0], &parts[4..], parts[1], parts[2], parts[3])
+    }))
+}
+
+/// Buffers `[ref name, id: 20, envelope...]` in; a git bundle of those objects out.
+///
+/// # Safety
+/// `pointer..pointer+length` must be readable.
+#[no_mangle]
+pub unsafe extern "C" fn eng_bundle(pointer: *const u8, length: usize) -> *mut u8 {
+    reply(buffers(input(pointer, length)).and_then(|parts| {
+        if parts.len() < 2 {
+            return Err(Error::Truncated);
+        }
+        let id = id_of(parts[1])?;
+        crate::write::write_bundle(&[(parts[0], id), (b"HEAD", id)], &parts[2..])
+    }))
+}
+
 /// Tree envelope in; JSON out.
 ///
 /// # Safety

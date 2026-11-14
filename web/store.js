@@ -3,17 +3,18 @@
 // Every read re-derives the label and refuses bytes that do not match it.
 
 import { labelOf } from './engine.js';
+import { sameLabel } from './kernel.js';
 
 let db;
 export const stats = { read: 0, refused: 0 };
 
 export function openStore() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('holo-git', 1);
+    const request = indexedDB.open('holo-git', 2);
     request.onupgradeneeded = () => {
-      request.result.createObjectStore('objects');
-      request.result.createObjectStore('refs');
-      request.result.createObjectStore('repos');
+      const have = request.result.objectStoreNames;
+      for (const name of ['objects', 'refs', 'repos', 'keys']) if (!have.contains(name)) request.result.createObjectStore(name);
+      if (!have.contains('reflog')) request.result.createObjectStore('reflog', { autoIncrement: true });
     };
     request.onsuccess = () => { db = request.result; resolve(); };
     request.onerror = () => reject(request.error);
@@ -47,7 +48,8 @@ export async function getObject(id) {
   const envelope = await ask(db.transaction('objects').objectStore('objects').get(label(id)));
   if (!envelope) throw new Error(`object ${id} is not in the store`);
   stats.read += 1;
-  if (labelOf(envelope) !== id) {
+  // The engine computes the label the bytes have; the proved kernel decides whether it is the one asked for.
+  if (!sameLabel(id, labelOf(envelope))) {
     stats.refused += 1;
     throw new Error(`object ${id} refused: stored bytes do not match their label`);
   }
@@ -77,5 +79,31 @@ export async function corruptObject(id) {
   const damaged = envelope.slice();
   damaged[damaged.length - 1] ^= 1;
   store.put(damaged, label(id));
+  await done(tx);
+}
+
+export const loadKey = () => ask(db.transaction('keys').objectStore('keys').get('device'));
+export async function saveKey(pair) {
+  const tx = db.transaction('keys', 'readwrite');
+  tx.objectStore('keys').put(pair, 'device');
+  await done(tx);
+}
+
+export async function listRefUpdates(repo) {
+  const all = await ask(db.transaction('reflog').objectStore('reflog').getAll());
+  return all.filter((record) => record.repo === repo);
+}
+
+// Compare-and-swap: the ref moves only if it still holds the value the update was signed against.
+export async function appendRefUpdate(record) {
+  const tx = db.transaction(['refs', 'reflog'], 'readwrite');
+  const refs = await ask(tx.objectStore('refs').get(record.repo));
+  if (!refs || refs[record.ref] !== record.old) {
+    tx.abort();
+    throw new Error('refused: the ref changed since this update was prepared');
+  }
+  refs[record.ref] = record.next;
+  tx.objectStore('refs').put(refs, record.repo);
+  tx.objectStore('reflog').add(record);
   await done(tx);
 }

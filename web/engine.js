@@ -98,3 +98,23 @@ export function open(envelope) {
   const kind = text.decode(envelope.subarray(0, nul)).split(' ')[0];
   return { kind, content: envelope.subarray(nul + 1) };
 }
+
+const utf8 = new TextEncoder();
+const unhex = (id) => Uint8Array.from(id.match(/../g), (b) => parseInt(b, 16));
+const withId = (out) => ({ id: hex(out.subarray(0, 20)), envelope: out.subarray(20) });
+
+// New objects. The engine serialises them and computes the identifier git would give them.
+export const makeObject = (kind, content) => withId(call('eng_envelope', pack([utf8.encode(kind), content])));
+
+export function makeTree(entries) {
+  const parts = [];
+  for (const entry of entries) parts.push(utf8.encode(entry.mode), utf8.encode(entry.name), unhex(entry.id));
+  return makeObject('tree', call('eng_tree_build', pack(parts)));
+}
+
+export function makeCommit({ tree, parents, author, committer, message }) {
+  return makeObject('commit', call('eng_commit_build', pack([tree, author, committer, message, ...parents].map((s) => utf8.encode(s)))));
+}
+
+// A git bundle: one ref and every object it needs. `git clone file.bundle` reads it.
+export const makeBundle = (ref, id, envelopes) => call('eng_bundle', pack([utf8.encode(ref), unhex(id), ...envelopes]));

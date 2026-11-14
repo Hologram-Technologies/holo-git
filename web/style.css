@@ -52,3 +52,9 @@ h3 .st { display: inline-block; width: auto; margin-right: 4px; }
 .blame tr:first-child td { border-top: 0; }
 .status + .status { margin-top: -16px; }
 .status button { padding: 2px 10px; font-size: 13px; }
+textarea { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: 13px/1.5 ui-monospace, Consolas, monospace; resize: vertical; }
+.edit { flex-direction: column; }
+.edit input { flex: 0 0 auto; }
+.edit button { align-self: flex-start; }
+.tools { margin: 0 0 12px; }
+.tools button { padding: 4px 10px; font-size: 13px; }
