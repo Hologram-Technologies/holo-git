@@ -1,0 +1,53 @@
+\begin{lexlean}{ProtectProofs}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\useglossary{prism.arch@1.0.0}
+\importmodule{Access}
+\importmodule{Protect}
+\title{Text application model}
+\begin{semanticmodule}
+theorem{
+  name: protected_branch_never_rewinds,
+  parameters: [evidence : Access::Evidence],
+  statement: ((Protect::refAllowed evidence (ctor Access::Flag.no) (ctor Access::Flag.no)) = false),
+  proof: reflexivity{}
+}
+
+theorem{
+  name: fast_forward_needs_only_authorization,
+  parameters: [evidence : Access::Evidence, forceAllowed : Access::Flag],
+  statement: ((Protect::refAllowed evidence (ctor Access::Flag.yes) forceAllowed) = (Access::authorize evidence)),
+  proof: reflexivity{}
+}
+
+theorem{
+  name: allowed_rewind_needs_only_authorization,
+  parameters: [evidence : Access::Evidence],
+  statement: ((Protect::refAllowed evidence (ctor Access::Flag.no) (ctor Access::Flag.yes)) = (Access::authorize evidence)),
+  proof: reflexivity{}
+}
+
+theorem{
+  name: unsigned_update_never_moves_a_ref,
+  parameters: [revoked : Access::Flag, live : Access::Flag, granted : Access::AccessMode, required : Access::AccessMode, fastForward : Access::Flag, forceAllowed : Access::Flag],
+  statement: ((Protect::refAllowed (record Access::Evidence {signed := (ctor Access::Flag.no), revoked := revoked, live := live, granted := granted, required := required}) fastForward forceAllowed) = false),
+  proof: cases{
+    branches: [
+      {
+        proof: cases{
+          branches: [
+            {proof: reflexivity{}, binders: [], constructor: no},
+            {proof: reflexivity{}, binders: [], constructor: yes}
+          ],
+          scrutinee: forceAllowed
+        },
+        binders: [],
+        constructor: no
+      },
+      {proof: reflexivity{}, binders: [], constructor: yes}
+    ],
+    scrutinee: fastForward
+  }
+}
+\end{semanticmodule}
+\end{lexlean}

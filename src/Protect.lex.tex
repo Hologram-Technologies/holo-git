@@ -1,0 +1,26 @@
+\begin{lexlean}{Protect}
+\useglossary{lexlean.std.bool@1.2.0}
+\useglossary{lexlean.std.nat@1.2.0}
+\useglossary{prism.arch@1.0.0}
+\importmodule{Access}
+\title{Text application model}
+\begin{semanticmodule}
+definition{
+  name: mayMove,
+  parameters: [fastForward : Access::Flag, forceAllowed : Access::Flag],
+  result: Access::Flag,
+  body: (match fastForward
+    | Access::Flag.yes => (ctor Access::Flag.yes)
+    | Access::Flag.no => forceAllowed)
+}
+
+definition{
+  name: refAllowed,
+  parameters: [evidence : Access::Evidence, fastForward : Access::Flag, forceAllowed : Access::Flag],
+  result: Bool,
+  body: (match (mayMove fastForward forceAllowed)
+    | Access::Flag.no => false
+    | Access::Flag.yes => (Access::authorize evidence))
+}
+\end{semanticmodule}
+\end{lexlean}
