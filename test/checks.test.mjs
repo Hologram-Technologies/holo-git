@@ -284,6 +284,13 @@ test('the command runs a check once per content, in any git checkout', () => {
   out = repo.run(['history', '--last', '10', '--ref', 'main', '--definitions', draft]);
   assert.match(out.stdout, /readme\s+2 distinct inputs in 5 commits \(60% reusable\)/);
   assert.equal(git(repo.dir, 'status', '--porcelain'), '');
+  // The same file runs checks too, on any commit, still without touching the repository.
+  out = repo.run(['run', '--definitions', draft, '--commit', 'HEAD~1']);
+  assert.equal(out.status, 0, out.stdout + out.stderr);
+  assert.match(out.stdout, /readme: pass in/);
+  assert.match(repo.run(['run', '--definitions', draft]).stdout, /readme: pass, reused/, 'HEAD and its parent agree on what this check reads');
+  assert.match(repo.run(['keys', '--definitions', draft]).stdout, /^[0-9a-f]{64} {2}readme {2}pass$/m);
+  assert.equal(git(repo.dir, 'status', '--porcelain'), '');
 });
 
 test('a check that reads a file it did not declare fails, instead of passing and being reused wrongly', () => {

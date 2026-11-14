@@ -26,6 +26,7 @@
 //                       change being checked cannot move, such as the protected branch: a list
 //                       read from the change itself would let its author trust themselves.
 //   --no-publish        read the store, write nothing to it
+//   --definitions FILE  for run and keys too: use a checks file that is not committed
 //   node scripts/check.mjs key                     print this machine's key, to be put on a signers list
 //
 // Order. Results that are already known are reported first, since they cost nothing. The checks
@@ -256,7 +257,7 @@ function ordered(pending) {
 
 async function run(names, { all = false, strict = false, retry = false, failFast = false, commit = 'HEAD' }, options) {
   const share = await sharing(options);
-  const definitions = definitionsAt(commit);
+  const definitions = options.definitions ? parseChecks(readFileSync(options.definitions)) : definitionsAt(commit);
   if (!definitions.size) { console.log(`no checks: ${CHECKS_PATH} is not in this commit`); return 0; }
   // A check that was asked for brings the checks whose outputs it uses.
   const wanted = [];
@@ -429,7 +430,7 @@ function hook(action) {
 
 async function keys(options) {
   const share = await sharing(options);
-  const definitions = definitionsAt('HEAD');
+  const definitions = options.definitions ? parseChecks(readFileSync(options.definitions)) : definitionsAt('HEAD');
   const lookup = lookupIn('HEAD');
   const lines = new Map();
   const produced = new Map();
@@ -497,6 +498,8 @@ const options = {
   signers: option('--signers', ''),
   signersRef: option('--signers-ref', process.env.HOLO_SIGNERS_REF || config('holo.signersRef')),
   noPublish: flag('--no-publish'),
+  // Definitions kept outside the repository: to try checks on a repository without changing it.
+  definitions: option('--definitions', ''),
 };
 let code;
 if (command === 'run') code = await run(positional, { all: flag('--all'), strict: flag('--strict'), retry: flag('--retry'), failFast: flag('--fail-fast'), commit: option('--commit', 'HEAD') }, options);
