@@ -167,6 +167,29 @@ Limits:
 - Two people pushing at once: the second is told to fetch; see Fetch and merge.
 - The proofs cover the access rules. Assembling the request (reading the log, checking signatures, choosing which grant applies) is page code, tested by hand only.
 
+## Working from a git checkout
+
+Commits are still made with git. `scripts/holo.mjs` carries them to a replica as signed updates and brings others' work back. It runs the page's own modules in Node, so the engine, the kernel and the fold over the signed log are the same code a browser runs; only storage (in memory) and the key (a file) differ.
+
+```bash
+node scripts/holo.mjs key                              # this machine's key, to be granted access
+node scripts/holo.mjs publish --replica URL            # move the branch to HEAD, fast-forward only
+node scripts/holo.mjs propose --replica URL            # offer HEAD as a pull request
+node scripts/holo.mjs status  --replica URL
+node scripts/holo.mjs approve --replica URL --pull N
+node scripts/holo.mjs merge   --replica URL --pull N
+node scripts/holo.mjs protect --replica URL --checks engine,page,model --approvals 1
+node scripts/holo.mjs grant   --replica URL --to KEY
+node scripts/holo.mjs fetch   --replica URL            # into refs/holo/<branch>, checked by git
+node scripts/runner.mjs run   --replica URL            # run required checks that have no result
+```
+
+Every git object is rebuilt by the engine on the way in and must come out with the identifier git gave it. On the way back, history is handed to git as a bundle, and git checks every object itself.
+
+Tested in `test/holo.test.mjs`, four tests against real git: a published history that a browser-side clone and `git fsck` both accept; an incremental publish; a refusal for a history that does not descend and for someone without access; and propose, approve, merge and fetch back into git.
+
+Limits: the key is a file on disk, readable by anything that can read the file; each command clones the replica into memory first, one request per object; one branch; no tags.
+
 ## Checks keyed by content
 
 A check is named by what it reads, not by when it ran. This is the part of the project aimed at waiting.
@@ -290,7 +313,7 @@ Tested: the engine's marked output is byte for byte what `git merge-file` prints
 Every push runs the checks that have no result for its content before anything is deployed. A failure stops the deploy. The checks are the suites below, split by what they need, and Lean's verification of the model.
 
 - `engine/tests`: fourteen tests of the engine against git (objects, packs, deltas, diff, blame, merge, written objects, packs and bundles).
-- `test/page.test.mjs`, `test/merge.test.mjs`, `test/s3.test.mjs`, `test/protect.test.mjs`, `test/pulls.test.mjs` and `test/checks.test.mjs`: sixty-three tests of the page's own modules (four of them against a real S3-compatible store), run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
+- `test/page.test.mjs`, `test/merge.test.mjs`, `test/s3.test.mjs`, `test/protect.test.mjs`, `test/pulls.test.mjs`, `test/checks.test.mjs` and `test/holo.test.mjs`: sixty-seven tests of the page's own modules (four of them against a real S3-compatible store), run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
 
 What the page tests cover: clone matches git object for object; history, changed paths and line counts match `git show --numstat`; blame matches `git blame`; altered stored bytes are refused; a commit made here is pulled and `fsck`ed by git; push sends only what is missing and git accepts what the replica holds; a tampered object, log record or head is refused; grant, use, escalation, revocation and expiry between two devices; a validly signed forgery written straight to the store; a broken chain and a record from another repository.
 
