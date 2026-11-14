@@ -163,23 +163,34 @@ Two people can now work on one replica without cloning again. Fetch brings a clo
 
 What is tested:
 
-- The engine's merge against `git merge-file` on 400 random cases: whenever the engine calls a merge clean, git does too, with the same bytes. In these cases the two agreed every time (382 clean, 18 conflicts).
-- Eight page tests between two devices: fast-forward, different files, different parts of one file, the same line, the same file added identically and differently, an unpushed grant issued again, and a device revoked in the meantime. Each clean merge's tree is exactly the tree `git merge-tree` writes for the same two commits, and git's `fsck` accepts the replica afterwards.
+- The engine's merge against `git merge-file` on 600 random cases: whenever the engine calls a merge clean, git does too, with the same bytes. The two agreed every time (551 clean, 49 conflicts).
+- Eleven page tests between two devices: fast-forward, different files, different parts of one file, the same line, the same file added identically and differently, an unpushed grant issued again, and a device revoked in the meantime. Each clean merge's tree is exactly the tree `git merge-tree` writes for the same two commits, and git's `fsck` accepts the replica afterwards.
 
 Limits:
 
-- A conflict cannot be resolved here yet. The way out is to clone again and redo the change.
-- A file deleted on one side and changed on the other is reported as a conflict, and so is a file whose kind changed. Renames are not followed.
+- The resolve screen is a plain text box. No side-by-side view, no per-region buttons, and a merge in progress is not saved if the page is closed.
+- A file whose kind changed on one side (file to directory) keeps this device's version unless the replica's is chosen whole. Renames are not followed.
 - With criss-cross history there can be several merge bases; the newest is used, where git would merge them first.
 - The merge commit is a plain commit with two parents. No rebase, no squash.
 - Fetch reads one request per object, like clone.
+
+### Resolving conflicts
+
+When a fetch finds a conflict, the page opens a resolve screen instead of stopping.
+
+- A text conflict is shown as git shows it: both sides between `<<<<<<< ours`, `=======` and `>>>>>>> theirs`. Edit to the text you want and remove the markers.
+- A conflict with no common text to edit (the same new path added differently, a file deleted on one side and changed on the other, a binary file) is a choice between this device's version and the replica's.
+- Completing the merge writes one merge commit whose message lists the paths that were resolved. Markers left in are refused. Until then nothing has changed, and leaving the screen abandons the merge.
+- Resolutions are tied to the replica state they were made against. If the replica moves again first, they are refused and the conflicts are shown afresh.
+
+Tested: the engine's marked output is byte for byte what `git merge-file` prints on all 49 conflicts among 600 random cases, and taking either side everywhere gives what `git merge-file --ours` and `--theirs` give. Three page tests cover resolving by editing, by choosing a side, markers left in, a resolution for the wrong path, and the replica moving in between. I also resolved one conflict by hand in the browser.
 
 ## Automated tests
 
 Every push runs two suites before anything is deployed. A failure stops the deploy.
 
-- `engine/tests`: thirteen tests of the engine against git (objects, packs, deltas, diff, blame, merge, written objects, packs and bundles).
-- `test/page.test.mjs` and `test/merge.test.mjs`: twenty-three tests of the page's own modules, run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
+- `engine/tests`: fourteen tests of the engine against git (objects, packs, deltas, diff, blame, merge, written objects, packs and bundles).
+- `test/page.test.mjs` and `test/merge.test.mjs`: twenty-six tests of the page's own modules, run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
 
 What the page tests cover: clone matches git object for object; history, changed paths and line counts match `git show --numstat`; blame matches `git blame`; altered stored bytes are refused; a commit made here is pulled and `fsck`ed by git; push sends only what is missing and git accepts what the replica holds; a tampered object, log record or head is refused; grant, use, escalation, revocation and expiry between two devices; a validly signed forgery written straight to the store; a broken chain and a record from another repository.
 

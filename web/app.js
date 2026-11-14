@@ -236,6 +236,44 @@ async function editPage(repo, refs, ref, path) {
   main.replaceChildren(header(repo, refs, ref, 'code'), crumbs(repo, ref, path, 'blob'), form, note);
 }
 
+let pendingMerge = null;
+
+// Conflicts from the last fetch, for a person to settle. Text conflicts are shown as git shows
+// them, between markers; the rest are a choice between this device's version and the replica's.
+async function resolvePage(repo, refs, ref) {
+  if (!pendingMerge || pendingMerge.repo !== repo.name || pendingMerge.ref !== ref) throw new Error('There is no merge waiting. Fetch from the Commits page first.');
+  const { result, address } = pendingMerge;
+  const note = el('p', { class: 'muted' }, 'Nothing changes until you complete the merge. Leaving this page abandons it.');
+  const controls = result.details.map((detail) => {
+    if (detail.kind === 'text' && detail.marked) {
+      const area = el('textarea', { 'aria-label': `Resolution of ${detail.path}`, spellcheck: 'false', rows: '18' });
+      area.value = text.decode(detail.marked);
+      return { detail, node: area, read: () => ({ content: new TextEncoder().encode(area.value) }) };
+    }
+    const choice = el('select', { 'aria-label': `Which version of ${detail.path} to keep` },
+      el('option', { value: 'ours' }, `Keep this device's version (${detail.ours})`),
+      el('option', { value: 'theirs' }, `Take the replica's version (${detail.theirs})`));
+    return { detail, node: choice, read: () => ({ take: choice.value }) };
+  });
+  const form = el('form', { class: 'edit', onsubmit: async (event) => {
+    event.preventDefault();
+    try {
+      const paths = new Map(controls.map(({ detail, read }) => [detail.path, read()]));
+      const outcome = await fetchFrom(repo, ref, address, { name: saved('holo-git-name'), email: saved('holo-git-email') }, () => {}, { against: result.against, paths });
+      if (outcome.outcome === 'conflict') { pendingMerge = { ...pendingMerge, result: outcome }; note.textContent = 'There are still conflicts.'; window.dispatchEvent(new HashChangeEvent('hashchange')); return; }
+      pendingMerge = null;
+      location.hash = `#/${repo.name}/commit/${outcome.head}`;
+    } catch (error) { note.textContent = error.message; note.className = 'error'; }
+  } },
+  controls.map(({ detail, node }) => el('section', { class: 'file' },
+    el('h3', {}, detail.path, el('span', { class: 'muted' }, ` · here: ${detail.ours} · on the replica: ${detail.theirs}`)),
+    detail.kind === 'text' && detail.marked ? el('p', { class: 'muted' }, 'Edit to the text you want and remove the three marker lines.') : '',
+    node)),
+  el('button', {}, 'Complete the merge'));
+  main.replaceChildren(header(repo, refs, ref, 'commits'),
+    el('h2', {}, `${result.details.length} conflict${result.details.length === 1 ? '' : 's'} to resolve`), form, note);
+}
+
 async function accessTools(repo, log) {
   const key = await deviceKey();
   const mine = el('input', { type: 'text', readonly: '', 'aria-label': 'This device\'s key', value: key.id });
@@ -303,7 +341,11 @@ async function branchTools(repo, refs, ref) {
       pushNote.textContent = ' fetching…';
       const result = await fetchFrom(repo, ref, address.value, { name: saved('holo-git-name'), email: saved('holo-git-email') }, (message) => { pushNote.textContent = ` ${message}`; });
       await setRepo({ ...repo, replica: address.value.replace(/\/+$/, '') });
-      if (result.outcome === 'conflict') { pushNote.textContent = ` Both sides changed the same lines in: ${result.conflicts.join(', ')}. Nothing here was changed.`; return; }
+      if (result.outcome === 'conflict') {
+        pendingMerge = { repo: repo.name, ref, address: address.value, result };
+        location.hash = `#/${repo.name}/resolve/${enc(ref)}`;
+        return;
+      }
       sessionStorage.setItem('holo-git-note', { 'up to date': 'Already up to date.', ahead: `Nothing new on the replica; ${result.unpushed} record${result.unpushed === 1 ? '' : 's'} here not pushed yet.`,
         'fast-forward': 'Fetched and moved to the replica\'s head.', merged: 'Fetched and merged with the changes made here. Push to publish the merge.',
         rebased: 'Fetched; the changes made here were signed again on top. Push to publish them.' }[result.outcome]);
@@ -357,6 +399,7 @@ async function route() {
       else if (view === 'commit') await commitPage(repo, refs, target);
       else if (view === 'blame') await blamePage(repo, refs, target, path);
       else if (view === 'edit') await editPage(repo, refs, target, path);
+      else if (view === 'resolve') await resolvePage(repo, refs, target);
       else await tree(repo, refs, target, path);
     }
   } catch (error) {

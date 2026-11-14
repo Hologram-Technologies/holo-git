@@ -195,6 +195,97 @@ test('the same new file added identically merges; added differently conflicts', 
   await gitjs.clone(url);
 });
 
+const resolveAs = async (name, against, entries) => fetchFrom(await store.getRepo('team'), 'main', url, { name, email: `${name.toLowerCase()}@example.org` }, () => {}, { against, paths: new Map(entries) });
+
+test('a text conflict is shown as git shows it and can be resolved by editing', async () => {
+  await on(alice);
+  await fetchAs('Alice');
+  const base = await read('docs/notes.txt');
+  const alices = await edit('Alice', 'docs/notes.txt', line(15, 'Alice rewrote line 15'), 'Alice edits line 15');
+  await push();
+  await on(bob);
+  const bobs = await edit('Bob', 'docs/notes.txt', line(15, 'Bob rewrote line 15'), 'Bob edits line 15');
+  const conflict = await fetchAs('Bob');
+  assert.equal(conflict.outcome, 'conflict');
+  assert.equal(conflict.against, alices.id);
+  const [detail] = conflict.details;
+  assert.equal(detail.kind, 'text');
+
+  // The marked text is byte for byte what git prints for the same three files.
+  const dir = scratch('marked');
+  writeFileSync(join(dir, 'base'), base);
+  writeFileSync(join(dir, 'ours'), line(15, 'Bob rewrote line 15')(base));
+  writeFileSync(join(dir, 'theirs'), line(15, 'Alice rewrote line 15')(base));
+  let gits;
+  try { execFileSync('git', ['merge-file', '-p', 'ours', 'base', 'theirs'], { cwd: dir, stdio: 'pipe' }); } catch (error) { gits = error.stdout; }
+  assert.equal(text.decode(detail.marked), gits.toString());
+
+  // Markers left in are refused, and nothing changes.
+  await assert.rejects(resolveAs('Bob', conflict.against, [['docs/notes.txt', { content: detail.marked }]]), /conflict markers are still in docs\/notes.txt/);
+  assert.equal(await head(), bobs.id);
+
+  const resolution = text.decode(detail.marked).replace(/<<<<<<< ours\n[\s\S]*?>>>>>>> theirs\n/, 'Alice and Bob agreed on line 15\n');
+  const done = await resolveAs('Bob', conflict.against, [['docs/notes.txt', { content: utf8.encode(resolution) }]]);
+  assert.equal(done.outcome, 'merged');
+  const merge = engine.parseCommit(await store.getObject(done.head));
+  assert.deepEqual(merge.parents, [alices.id, bobs.id]);
+  assert.match(merge.message, /Conflicts resolved in:\n {2}docs\/notes.txt/);
+  assert.equal(await read('docs/notes.txt'), resolution);
+  assert.equal((await identity.checkLog('team')).valid, true);
+  await push();
+  const rebuilt = replicaToGit(join(replica.dir, 'team'));
+  git(rebuilt.target, 'fsck', '--strict');
+  assert.equal(git(rebuilt.target, 'show', 'HEAD:docs/notes.txt'), resolution.trimEnd());
+  await on(alice);
+  assert.equal((await fetchAs('Alice')).outcome, 'fast-forward');
+  assert.equal(await read('docs/notes.txt'), resolution);
+});
+
+test('a conflict without a common text is resolved by choosing a side', async () => {
+  await on(alice);
+  await edit('Alice', 'choice.txt', () => 'from Alice\n', 'Alice adds choice.txt');
+  await push();
+  await on(bob);
+  await edit('Bob', 'choice.txt', () => 'from Bob\n', 'Bob adds a different choice.txt');
+  const conflict = await fetchAs('Bob');
+  assert.equal(conflict.outcome, 'conflict');
+  assert.equal(conflict.details[0].ours, 'added');
+  assert.equal(conflict.details[0].theirs, 'added');
+  // Resolving a different path than the one in conflict leaves the conflict standing.
+  assert.equal((await resolveAs('Bob', conflict.against, [['other.txt', { take: 'ours' }]])).outcome, 'conflict');
+  const done = await resolveAs('Bob', conflict.against, [['choice.txt', { take: 'theirs' }]]);
+  assert.equal(done.outcome, 'merged');
+  assert.equal(await read('choice.txt'), 'from Alice\n');
+  await push();
+  await on(alice);
+  await fetchAs('Alice');
+});
+
+test('resolutions made for an older state of the replica are refused', async () => {
+  await on(alice);
+  await edit('Alice', 'docs/notes.txt', line(5, 'Alice, first'), 'Alice edits line 5');
+  await push();
+  await on(bob);
+  const bobs = await edit('Bob', 'docs/notes.txt', line(5, 'Bob'), 'Bob edits line 5');
+  const conflict = await fetchAs('Bob');
+  assert.equal(conflict.outcome, 'conflict');
+  await on(alice);
+  await edit('Alice', 'docs/notes.txt', line(5, 'Alice, second thoughts'), 'Alice edits line 5 again');
+  await push();
+  await on(bob);
+  await assert.rejects(resolveAs('Bob', conflict.against, [['docs/notes.txt', { take: 'ours' }]]), /changed again/);
+  assert.equal(await head(), bobs.id);
+  const again = await fetchAs('Bob');
+  assert.equal(again.outcome, 'conflict');
+  assert.match(text.decode(again.details[0].marked), /Alice, second thoughts/);
+  const done = await resolveAs('Bob', again.against, [['docs/notes.txt', { take: 'ours' }]]);
+  assert.equal(done.outcome, 'merged');
+  assert.match(await read('docs/notes.txt'), /^Bob$/m);
+  await push();
+  await on(alice);
+  await fetchAs('Alice');
+});
+
 test('an unpushed grant is issued again on top of what was fetched', async () => {
   const carol = 'c'.repeat(64);
   await on(alice);

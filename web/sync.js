@@ -5,6 +5,9 @@
 // commits become one merge, its grants and revocations are issued again. Nothing already
 // published is rewritten. Every re-signed record goes through the same fold and the same kernel
 // decision as any other, so a device whose access was withdrawn meanwhile cannot merge.
+//
+// When both sides changed the same lines, nothing here changes. The conflicts are returned for a
+// person to resolve, and the same call is made again with their resolutions.
 
 import { parseCommit, open, makeObject, makeTree, makeCommit, mergeLines } from './engine.js';
 import { fold } from './log.js';
@@ -13,6 +16,8 @@ import { extend, deviceKey } from './identity.js';
 import { readState, fetchLog, fetchMissing } from './replica.js';
 import { getObject, putObjects, listRefUpdates, getRefs, adoptLog } from './store.js';
 import { readTree, person } from './git.js';
+
+const text = new TextDecoder();
 
 async function ancestors(start) {
   const seen = new Set();
@@ -42,13 +47,20 @@ async function mergeBase(ours, theirs) {
 const isTree = (entry) => entry && entry.mode === '40000';
 const same = (a, b) => (!a && !b) || (a && b && a.id === b.id && a.mode === b.mode);
 const binary = (bytes) => bytes.subarray(0, 8000).includes(0);
+const became = (entry, base) => (!entry ? 'deleted' : isTree(entry) ? 'a directory' : !base ? 'added' : 'changed');
+
+// A resolution may not still contain the markers a conflict was shown with.
+export function hasMarkers(bytes) {
+  return /^(<<<<<<< ours|=======|>>>>>>> theirs)\r?$/m.test(text.decode(bytes));
+}
 
 // Merge three trees. Identical subtrees are recognised by identifier and never opened.
 // Returns the merged tree's identifier, or null when the directory ends up empty.
-async function mergeTrees(base, ours, theirs, prefix, conflicts, made, top = false) {
+async function mergeTrees(base, ours, theirs, prefix, context, top = false) {
   if (ours === theirs) return ours;
   if (base === ours) return theirs;
   if (base === theirs) return ours;
+  const { conflicts, made, resolutions } = context;
   const list = async (id) => new Map((id ? await readTree(id) : []).map((entry) => [entry.name, entry]));
   const [b, o, t] = [await list(base), await list(ours), await list(theirs)];
   const entries = [];
@@ -60,19 +72,38 @@ async function mergeTrees(base, ours, theirs, prefix, conflicts, made, top = fal
     else if (same(be, oe)) pick = te;
     else if (same(be, te)) pick = oe;
     else if (isTree(oe) && isTree(te)) {
-      const id = await mergeTrees(isTree(be) ? be.id : null, oe.id, te.id, `${path}/`, conflicts, made);
+      const id = await mergeTrees(isTree(be) ? be.id : null, oe.id, te.id, `${path}/`, context);
       pick = id ? { mode: '40000', name, id } : undefined;
-    } else if (oe && te && be && !isTree(oe) && !isTree(te) && !isTree(be) && oe.mode === te.mode) {
-      const content = async (entry) => open(await getObject(entry.id)).content;
-      const [bc, oc, tc] = [await content(be), await content(oe), await content(te)];
-      const merged = binary(bc) || binary(oc) || binary(tc) ? { clean: false } : mergeLines(bc, oc, tc);
-      if (merged.clean) {
-        const blob = makeObject('blob', merged.bytes);
-        made.push(blob);
-        pick = { mode: oe.mode, name, id: blob.id };
-      } else { conflicts.push(path); pick = oe; }
-    } else { conflicts.push(path); pick = oe; } // added differently on both sides, deleted on one and changed on the other, or a type change
-    if (pick) entries.push(pick);
+    } else {
+      // Both sides changed this path differently. Try the text merge; otherwise a person decides.
+      const bothFiles = oe && te && !isTree(oe) && !isTree(te) && oe.mode === te.mode && (!be || !isTree(be));
+      let detail = { path, kind: 'choice', ours: became(oe, be), theirs: became(te, be) };
+      if (bothFiles) {
+        const content = async (entry) => (entry ? open(await getObject(entry.id)).content : new Uint8Array());
+        const [bc, oc, tc] = [await content(be), await content(oe), await content(te)];
+        if (!binary(bc) && !binary(oc) && !binary(tc)) {
+          const merged = mergeLines(bc, oc, tc);
+          if (merged.clean && be) {
+            const blob = makeObject('blob', merged.bytes);
+            made.push(blob);
+            pick = { mode: oe.mode, name, id: blob.id };
+            detail = null;
+          } else detail = { path, kind: 'text', ours: became(oe, be), theirs: became(te, be), marked: merged.clean ? null : merged.marked, oursText: oc, theirsText: tc };
+        }
+      }
+      if (detail) {
+        const decided = resolutions.get(path);
+        if (decided && decided.content) {
+          if (hasMarkers(decided.content)) throw new Error(`conflict markers are still in ${path}`);
+          const blob = makeObject('blob', decided.content);
+          made.push(blob);
+          pick = { mode: (oe && !isTree(oe) ? oe : te && !isTree(te) ? te : { mode: '100644' }).mode, name, id: blob.id };
+        } else if (decided && decided.take === 'ours') pick = oe;
+        else if (decided && decided.take === 'theirs') pick = te;
+        else { conflicts.push(detail); pick = oe; }
+      }
+    }
+    if (pick) entries.push({ mode: pick.mode, name, id: pick.id });
   }
   if (!entries.length && !top) return null;
   const tree = makeTree(entries);
@@ -88,7 +119,9 @@ function identityLine(name, email, time) {
   return `${clean(name)} <${clean(email)}> ${Math.floor(time / 1000)} ${zone}`;
 }
 
-export async function fetchFrom(repo, branch, base, who = {}, report = () => {}) {
+// `resolution` is { against, paths }: the replica head the conflicts were shown for, and for each
+// conflicting path either { content } or { take: 'ours' | 'theirs' }.
+export async function fetchFrom(repo, branch, base, who = {}, report = () => {}, resolution = null) {
   base = base.replace(/\/+$/, '');
   const ref = `refs/heads/${branch}`;
   const { state } = await readState(base);
@@ -97,6 +130,7 @@ export async function fetchFrom(repo, branch, base, who = {}, report = () => {})
   const remoteState = await fold(remote);
   const remoteHead = remoteState.heads[ref];
   if (state.refs[ref].record !== remoteState.digest || state.refs[ref].id !== remoteHead) throw new Error('refused: the replica names a head its signed log does not lead to');
+  if (resolution && resolution.against !== remoteHead) throw new Error('the replica changed again since these conflicts were shown; fetch and resolve again');
 
   const local = await listRefUpdates(repo.name);
   let shared = 0;
@@ -124,7 +158,6 @@ export async function fetchFrom(repo, branch, base, who = {}, report = () => {})
   const changed = extra.some((record) => (record.type || 'ref') === 'ref');
   let head = remoteHead;
   let outcome = 'fast-forward';
-  let conflicts = [];
   if (changed && localHead !== remoteHead && !(await ancestors(remoteHead)).has(localHead)) {
     if ((await ancestors(localHead)).has(remoteHead)) {
       head = localHead; // the replica's head is already in our history
@@ -132,13 +165,16 @@ export async function fetchFrom(repo, branch, base, who = {}, report = () => {})
     } else {
       const baseCommit = await mergeBase(localHead, remoteHead);
       const tree = (id) => getObject(id).then((envelope) => parseCommit(envelope).tree);
-      const made = [];
-      const merged = await mergeTrees(baseCommit ? await tree(baseCommit) : null, await tree(localHead), await tree(remoteHead), '', conflicts, made, true);
-      if (conflicts.length) return { outcome: 'conflict', conflicts, head: localHead, fetched };
+      const context = { conflicts: [], made: [], resolutions: (resolution && resolution.paths) || new Map() };
+      const merged = await mergeTrees(baseCommit ? await tree(baseCommit) : null, await tree(localHead), await tree(remoteHead), '', context, true);
+      if (context.conflicts.length) {
+        return { outcome: 'conflict', conflicts: context.conflicts.map((detail) => detail.path), details: context.conflicts, against: remoteHead, head: localHead, fetched };
+      }
       const line = identityLine(who.name || '', who.email || '', Date.now());
-      const commit = makeCommit({ tree: merged, parents: [remoteHead, localHead], author: line, committer: line, message: 'Merge changes made on this device\n' });
-      made.push(commit);
-      await putObjects(made);
+      const resolved = context.resolutions.size ? `\n\nConflicts resolved in:\n${[...context.resolutions.keys()].sort().map((path) => `  ${path}`).join('\n')}\n` : '\n';
+      const commit = makeCommit({ tree: merged, parents: [remoteHead, localHead], author: line, committer: line, message: `Merge changes made on this device${resolved}` });
+      context.made.push(commit);
+      await putObjects(context.made);
       head = commit.id;
       outcome = 'merged';
     }

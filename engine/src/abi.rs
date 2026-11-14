@@ -229,7 +229,8 @@ pub unsafe extern "C" fn eng_bundle(pointer: *const u8, length: usize) -> *mut u
     }))
 }
 
-/// Buffers `[base, ours, theirs]` in; `[clean: u8][merged bytes]` out. The bytes are present only when clean.
+/// Buffers `[base, ours, theirs]` in; `[clean: u8][bytes]` out. When clean the bytes are the
+/// merged text; otherwise they are the text with each disputed region between markers.
 ///
 /// # Safety
 /// `pointer..pointer+length` must be readable.
@@ -238,11 +239,8 @@ pub unsafe extern "C" fn eng_merge(pointer: *const u8, length: usize) -> *mut u8
     reply(buffers(input(pointer, length)).and_then(|parts| {
         let [base, ours, theirs] = parts[..] else { return Err(Error::Truncated) };
         let merged = crate::merge::merge(base, ours, theirs);
-        if merged.conflicts > 0 {
-            return Ok(vec![0]);
-        }
         let mut out = Vec::with_capacity(1 + merged.bytes.len());
-        out.push(1);
+        out.push(u8::from(merged.conflicts == 0));
         out.extend_from_slice(&merged.bytes);
         Ok(out)
     }))
