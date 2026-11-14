@@ -122,3 +122,15 @@ Storage follows the split above, not kappa's on-disk layout.
 4. Browser writes to kappa peers depend on an upstream change we do not control.
 5. Per-test dependency tracking and failure normalisation are research-grade problems, not plumbing.
 6. Scope. Gitea is roughly 830 routes. The parity matrix must be cut into releases.
+
+## Learned in Phase 1
+
+Recorded 2026-11-14, from building the first kernel.
+
+- The proof steps that work at scale are exhaustive case analysis over small enumerations and the fixed arithmetic step over pure number expressions. A statement mixing the two usually fails; split it into one lemma of each kind.
+- Case splits on Booleans are refused by the pinned toolchain. Flags are a two-value type instead.
+- Keep theorems out of any module the kernel imports. Theorems in the application's import graph made the local build time out.
+- Case analysis grows as the product of the enumerations. Five modes across five links is out of reach; design rules so the property follows from a two- or three-variable lemma.
+- A full build takes about 7 minutes on a GitHub runner. Lean verification alone takes about 70 seconds on the hosted verifier.
+- Requests are positional bytes. Lists as intermediate values and repeated byte conversions are known to break the build; the kernel uses one recursive word decoder.
+- Kernel operations so far: 1 authorize (6 bytes), 2 order (7), 3 delegation chain (23), 5 restore (131).
