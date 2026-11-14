@@ -41,6 +41,14 @@ jobs:
             grep '^shell:' build.log
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
+      - name: Use a current Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test the page's own code against git and a stand-in store
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
       - name: Upload the page
         uses: actions/upload-pages-artifact@v3
         with:

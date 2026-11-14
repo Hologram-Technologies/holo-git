@@ -1,0 +1,12 @@
+{
+  "name": "holo-git",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test test/page.test.mjs"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.0.0"
+  }
+}

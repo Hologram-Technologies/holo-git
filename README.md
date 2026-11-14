@@ -61,7 +61,7 @@ What is tested: engine tests run against git itself.
 
 The page was exercised by hand against a replica of this repository: the object count matches git, the added and removed line counts match `git show --numstat` for 27 files in three commits, and the README's blame matches `git blame`.
 
-Not done yet: rename detection (a rename shows as a removal and an addition), blame through merges, markdown rendering, partial clone, and large repositories (a pack is held in memory whole). Diffs with more than 2,000 differing lines fall back to a full replacement. Storage is IndexedDB, not the file store the architecture proposes. The page has no automated tests. The pin does not protect the first visit, and a visitor who accepts a new version without comparing digests is trusting the host again.
+Not done yet: rename detection (a rename shows as a removal and an addition), blame through merges, markdown rendering, partial clone, and large repositories (a pack is held in memory whole). Diffs with more than 2,000 differing lines fall back to a full replacement. Storage is IndexedDB, not the file store the architecture proposes. The pin does not protect the first visit, and a visitor who accepts a new version without comparing digests is trusting the host again.
 
 ```bash
 (cd engine && cargo test --release)
@@ -151,6 +151,27 @@ Limits:
 - A grant names a device key, not a person. There is no key-to-identity binding yet.
 - Two people pushing at once: the second is told to clone again. There is no fetch or merge.
 - The proofs cover the access rules. Assembling the request (reading the log, checking signatures, choosing which grant applies) is page code, tested by hand only.
+
+## Automated tests
+
+Every push runs two suites before anything is deployed. A failure stops the deploy.
+
+- `engine/tests`: eleven tests of the engine against git (objects, packs, deltas, diff, blame, written objects, packs and bundles).
+- `test/page.test.mjs`: fifteen tests of the page's own modules, run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
+
+What the page tests cover: clone matches git object for object; history, changed paths and line counts match `git show --numstat`; blame matches `git blame`; altered stored bytes are refused; a commit made here is pulled and `fsck`ed by git; push sends only what is missing and git accepts what the replica holds; a tampered object, log record or head is refused; grant, use, escalation, revocation and expiry between two devices; a validly signed forgery written straight to the store; a broken chain and a record from another repository.
+
+One test records a known limit instead of a guarantee: a replica rolled back to an older signed state is accepted. It will fail when that is fixed, as a reminder to update this file.
+
+The tests were checked for teeth: with the label check disabled eight of them fail, and with the kernel's decision ignored five fail.
+
+Not covered: the interface itself (`app.js`), the service worker and the update prompt, and real browsers. Those are still checked by hand. The tests run under Node, whose storage and cryptography are not the browser's.
+
+```bash
+(cd engine && cargo test --release)
+sh scripts/build-web.sh
+npm ci && npm test
+```
 
 ## Read next
 

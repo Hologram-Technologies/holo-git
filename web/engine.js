@@ -6,8 +6,9 @@ const ERRORS = ['', 'truncated', 'not a packfile', 'unsupported pack version', '
 
 let wasm;
 
-export async function loadEngine(url = 'engine.wasm') {
-  const bytes = await (await fetch(url)).arrayBuffer();
+// `source` is an address to fetch, or the module's bytes (used by the tests).
+export async function loadEngine(source = 'engine.wasm') {
+  const bytes = typeof source === 'string' ? await (await fetch(source)).arrayBuffer() : source;
   const { instance } = await WebAssembly.instantiate(bytes, {});
   wasm = instance.exports;
 }

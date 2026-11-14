@@ -6,8 +6,8 @@ const text = new TextDecoder();
 let module;
 export const decisions = { asked: 0 };
 
-export async function loadKernel(url = 'kernel.wasm') {
-  module = await WebAssembly.compile(await (await fetch(url)).arrayBuffer());
+export async function loadKernel(source = 'kernel.wasm') {
+  module = await WebAssembly.compile(typeof source === 'string' ? await (await fetch(source)).arrayBuffer() : source);
   if (WebAssembly.Module.imports(module).length !== 0) throw new Error('the kernel must import nothing');
 }
 
