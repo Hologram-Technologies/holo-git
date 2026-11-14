@@ -2,3 +2,8 @@
 .prism/
 .lake/
 node_modules/
+
+# Phase 2
+engine/target/
+web/engine.wasm
+web/fixtures/

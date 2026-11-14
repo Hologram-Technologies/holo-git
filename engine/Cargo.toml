@@ -1,0 +1,20 @@
+[package]
+name = "holo-git-engine"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Git objects, packfiles and deltas for holo-git. Computes; never decides."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+miniz_oxide = { version = "0.8", default-features = false, features = ["with-alloc"] }
+sha1 = { version = "0.10", default-features = false }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
