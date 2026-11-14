@@ -13,7 +13,6 @@
 // For a store that needs signed requests, set HOLO_S3_ACCESS_KEY and HOLO_S3_SECRET_KEY.
 
 import 'fake-indexeddb/auto';
-import { spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -28,6 +27,7 @@ const identity = await import('../web/identity.js');
 const replica = await import('../web/replica.js');
 const { expectedActions } = await import('../web/evidence.js');
 const { parseChecks, CHECKS_PATH } = await import('../web/checks.js');
+const { environmentFor, toolsFor, execute } = await import('./lib/execute.mjs');
 
 const args = process.argv.slice(2);
 const option = (name, fallback) => (args.includes(name) ? args[args.indexOf(name) + 1] : fallback);
@@ -53,18 +53,27 @@ async function loadKey() {
   return (await identity.deviceKey()).id;
 }
 
-// Write a commit's files to a directory.
-async function materialise(treeId, dir) {
-  mkdirSync(dir, { recursive: true });
-  for (const entry of await gitjs.readTree(treeId)) {
-    const path = join(dir, entry.name);
-    if (entry.mode === '40000') await materialise(entry.id, path);
-    else if (entry.mode === '160000') continue; // a submodule: nothing to write
-    else {
-      writeFileSync(path, engine.open(await store.getObject(entry.id)).content);
-      if (entry.mode === '100755') chmodSync(path, 0o755);
-    }
+// Write one path of a tree to a directory: a file, or a directory and everything under it.
+async function materialise(entry, path) {
+  if (entry.mode === '40000') {
+    mkdirSync(path, { recursive: true });
+    for (const child of await gitjs.readTree(entry.id)) await materialise(child, join(path, child.name));
+  } else if (entry.mode !== '160000') { // a submodule has nothing to write
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, engine.open(await store.getObject(entry.id)).content);
+    if (entry.mode === '100755') chmodSync(path, 0o755);
   }
+}
+
+// A directory holding exactly the inputs a check declared, from the proposed tree.
+async function prepare(definition, treeId) {
+  const dir = mkdtempSync(join(tmpdir(), 'holo-git-run-'));
+  for (const path of definition.inputs) {
+    let entry = null;
+    try { entry = await gitjs.lookup(treeId, path); } catch { /* absent in this tree */ }
+    if (entry) await materialise({ mode: entry.mode, id: entry.id }, join(dir, path));
+  }
+  return dir;
 }
 
 async function run() {
@@ -91,28 +100,27 @@ async function run() {
     const baseTree = engine.parseCommit(await store.getObject(base)).tree;
     let definitions = new Map();
     try { definitions = parseChecks(engine.open(await store.getObject((await gitjs.lookup(baseTree, CHECKS_PATH)).id)).content); } catch { /* none defined */ }
-    let dir = null;
+    const headTree = engine.parseCommit(await store.getObject(pull.head)).tree;
     for (const [i, name] of required.entries()) {
       const action = expected[i];
       if (!action) { console.log(`#${pull.number} ${name}: not defined on the branch; nothing can satisfy it`); continue; }
       const have = known.get(action);
       if (have) { console.log(`#${pull.number} ${name}: ${have.result}, reused (${action.slice(0, 12)})`); reused += 1; continue; }
-      if (!dir) {
-        dir = mkdtempSync(join(tmpdir(), 'holo-git-run-'));
-        await materialise(engine.parseCommit(await store.getObject(pull.head)).tree, dir);
-      }
       const definition = definitions.get(name);
+      const { env, missing } = environmentFor(definition);
+      if (missing) { console.log(`#${pull.number} ${name}: cannot run here: it needs ${missing.join(', ')} in the environment`); continue; }
+      const { problem } = toolsFor(definition, env);
+      if (problem) { console.log(`#${pull.number} ${name}: cannot run here: ${problem}`); continue; }
+      const dir = await prepare(definition, headTree);
       console.log(`#${pull.number} ${name}: running (${action.slice(0, 12)}): ${definition.run}`);
-      const begun = Date.now();
-      const outcome = spawnSync(definition.run, { cwd: join(dir, definition.cwd), shell: true, stdio: 'inherit' });
-      const result = outcome.status === 0 ? 'pass' : 'fail';
-      console.log(`#${pull.number} ${name}: ${result} in ${Math.round((Date.now() - begun) / 100) / 10}s`);
+      const { result, seconds } = execute(definition, join(dir, definition.cwd), env);
+      rmSync(dir, { recursive: true, force: true });
+      console.log(`#${pull.number} ${name}: ${result} in ${seconds}s`);
       await identity.recordCheck(repo.name, name, action, result);
       known.set(action, { name, result, by: me });
       ran += 1;
       published += 1;
     }
-    if (dir) rmSync(dir, { recursive: true, force: true });
   }
   if (published) await replica.push(await store.getRepo(repo.name), repo.head.replace('refs/heads/', ''), url);
   console.log(`${pulls.length} open pull request${pulls.length === 1 ? '' : 's'}: ${ran} check${ran === 1 ? '' : 's'} ran, ${reused} reused, ${published} result${published === 1 ? '' : 's'} published`);

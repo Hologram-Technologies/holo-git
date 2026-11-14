@@ -42,7 +42,7 @@ For a change that touches one file out of many, most checks are in the first cat
    - the kernel build, keyed on `src/` and the build image.
    The executor is a small command run on a contributor's machine, because a browser cannot run a compiler or Lean. It publishes results to the replica; the page reads them.
 4. **Measure.** Done once: over this repository's first 26 commits, 30 check runs with reuse against 78 without, 62 percent avoided. Far from 100 times; the history is short and most commits touched checked code. Measure again on a larger codebase before drawing conclusions.
-5. **Close the soundness gaps in reuse**, because a wrongly reused pass is worse than a slow check: put the toolchain and environment in the key, split checks so that one changed file reruns less, and name trusted runners.
+5. **Close the soundness gaps in reuse**, because a wrongly reused pass is worse than a slow check. Done: declared tools and environment are in the key, and a check runs with only its declared inputs. Still open: real isolation from the network and clock, telling a machine's failure from the content's, named trusted runners, and reuse inside a check.
 6. **Self-hosting.** Develop this repository through itself, with GitHub as a mirror.
 7. **The rest of collaboration:** issues, review discussion, organisations.
 8. **Identity and privacy:** passkeys, encrypted private repositories, rollback detection.

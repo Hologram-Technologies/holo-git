@@ -214,61 +214,131 @@ test('a definitions file that cannot be read is an error, never an empty set of 
   assert.throws(() => parseChecks('{}'), /expected/);
 });
 
-test('the command runs a check once per content, in any git checkout', () => {
-  const dir = scratch('cli');
-  const count = join(dir, '..', `count-${process.pid}.txt`);
-  const results = join(dir, '..', `results-${process.pid}`);
-  const env = { ...process.env, COUNT: count, HOLO_RESULTS: results };
-  const run = (...args) => spawnSync(process.execPath, [join(root, 'scripts', 'check.mjs'), ...args], { cwd: dir, env, encoding: 'utf8' });
-  const runs = () => (existsSync(count) ? readFileSync(count, 'utf8').length : 0);
+// A git checkout with the command wired to private result and work directories.
+function checkout(name, checks, files) {
+  const dir = scratch(name);
+  const side = scratch(`${name}-side`);
+  const count = join(side, 'count.txt');
+  const env = { ...process.env, COUNT: count, HOLO_RESULTS: join(side, 'results'), HOLO_WORK: join(side, 'work') };
   const commit = (message) => { git(dir, 'add', '-A'); git(dir, 'commit', '-q', '-m', message); };
+  const write = (path, text) => { mkdirSync(join(dir, path, '..'), { recursive: true }); writeFileSync(join(dir, path), text); };
   git(dir, 'init', '-q', '-b', 'main');
-  mkdirSync(join(dir, '.holo'));
-  mkdirSync(join(dir, 'lib'));
-  writeFileSync(join(dir, 'lib', 'a.txt'), 'one\n');
-  writeFileSync(join(dir, 'README.md'), 'readme\n');
-  writeFileSync(join(dir, 'flag.txt'), 'ok\n');
-  const tick = 'node -e "require(\'fs\').appendFileSync(process.env.COUNT,\'x\')"';
-  writeFileSync(join(dir, '.holo', 'checks.json'), JSON.stringify({ checks: [
-    { name: 'lib', run: tick, inputs: ['lib'] },
-    { name: 'flag', run: 'node -e "process.exit(require(\'fs\').readFileSync(\'flag.txt\',\'utf8\').trim()===\'ok\'?0:1)"', inputs: ['flag.txt'] },
-  ] }));
+  write('.holo/checks.json', JSON.stringify({ checks }));
+  for (const [path, text] of Object.entries(files)) write(path, text);
   commit('first');
+  return {
+    dir, write, commit,
+    run: (args = [], extra = {}) => spawnSync(process.execPath, [join(root, 'scripts', 'check.mjs'), ...args], { cwd: dir, env: { ...env, ...extra }, encoding: 'utf8' }),
+    runs: () => (existsSync(count) ? readFileSync(count, 'utf8').length : 0),
+  };
+}
+const TICK = 'node -e "require(\'fs\').appendFileSync(process.env.COUNT,\'x\')"';
+const exits = (expression) => `node -e "process.exit(${expression}?0:1)"`;
+const fileIs = (path, value) => exits(`require('fs').readFileSync('${path}','utf8').trim()==='${value}'`);
 
-  let out = run('run');
+test('the command runs a check once per content, in any git checkout', () => {
+  const repo = checkout('cli', [
+    { name: 'lib', run: TICK, inputs: ['lib'], env: ['COUNT'] },
+    { name: 'flag', run: fileIs('flag.txt', 'ok'), inputs: ['flag.txt'] },
+  ], { 'lib/a.txt': 'one\n', 'README.md': 'readme\n', 'flag.txt': 'ok\n' });
+
+  let out = repo.run(['run']);
   assert.equal(out.status, 0, out.stdout + out.stderr);
-  assert.equal(runs(), 1);
+  assert.equal(repo.runs(), 1);
   assert.match(out.stdout, /2 checks: 2 ran/);
 
-  out = run('run');
-  assert.equal(runs(), 1, 'nothing ran the second time');
-  assert.match(out.stdout, /2 checks: 0 ran/);
+  out = repo.run(['run']);
+  assert.equal(repo.runs(), 1, 'nothing ran the second time');
+  assert.match(out.stdout, /2 checks: 0 ran, 2 reused/);
 
-  writeFileSync(join(dir, 'README.md'), 'readme, edited\n');
-  commit('edit something no check reads');
-  out = run('run');
-  assert.equal(runs(), 1, 'an unrelated commit runs nothing');
+  repo.write('README.md', 'readme, edited\n');
+  repo.commit('edit something no check reads');
+  repo.run(['run']);
+  assert.equal(repo.runs(), 1, 'an unrelated commit runs nothing');
 
-  writeFileSync(join(dir, 'lib', 'a.txt'), 'two\n');
-  out = run('run', 'lib');
-  assert.equal(out.status, 1, 'uncommitted changes under the inputs are refused');
-  assert.match(out.stdout, /refused, uncommitted changes/);
-  commit('edit what the check reads');
-  out = run('run');
-  assert.equal(runs(), 2, 'a change to the inputs runs the check again');
-  assert.match(out.stdout, /2 checks: 1 ran/);
+  repo.write('lib/a.txt', 'two\n');
+  out = repo.run(['run']);
+  assert.equal(repo.runs(), 1, 'an uncommitted edit is not what is checked: the committed content already has a result');
+  repo.commit('edit what the check reads');
+  out = repo.run(['run']);
+  assert.equal(repo.runs(), 2, 'a change to the inputs runs the check again');
+  assert.match(out.stdout, /2 checks: 1 ran, 1 reused/);
 
-  writeFileSync(join(dir, 'flag.txt'), 'broken\n');
-  commit('break the flag');
-  assert.equal(run('run').status, 1);
-  out = run('run');
+  repo.write('flag.txt', 'broken\n');
+  repo.commit('break the flag');
+  assert.equal(repo.run(['run']).status, 1);
+  out = repo.run(['run']);
   assert.equal(out.status, 1, 'a reused failure is still a failure');
   assert.match(out.stdout, /flag: fail, reused/);
 
-  git(dir, 'revert', '--no-edit', 'HEAD');
-  out = run('run');
+  git(repo.dir, 'revert', '--no-edit', 'HEAD');
+  out = repo.run(['run']);
   assert.equal(out.status, 0, 'reverting to content that passed needs no run');
   assert.match(out.stdout, /2 checks: 0 ran/);
-  assert.match(run('history', '--last', '10').stdout, /runs avoided: \d+ of 10/);
-  assert.ok(execFileSync);
+  assert.match(repo.run(['history', '--last', '10']).stdout, /runs avoided: \d+ of 10/);
+});
+
+test('a check that reads a file it did not declare fails, instead of passing and being reused wrongly', () => {
+  const repo = checkout('undeclared', [
+    { name: 'honest', run: fileIs('other/b.txt', 'b'), inputs: ['lib', 'other'] },
+    { name: 'sneaky', run: fileIs('other/b.txt', 'b'), inputs: ['lib'] },
+  ], { 'lib/a.txt': 'a\n', 'other/b.txt': 'b\n' });
+  const out = repo.run(['run']);
+  assert.match(out.stdout, /honest: pass/);
+  assert.match(out.stdout, /sneaky: fail/, 'the file it reads is not there, because it did not declare it');
+  assert.equal(out.status, 1);
+});
+
+test('a check sees only the environment it named, and is skipped where a named variable is missing', () => {
+  const repo = checkout('environment', [
+    { name: 'blind', run: exits('!process.env.SECRET_SETTING'), inputs: ['lib'] },
+    { name: 'needs', run: exits("process.env.SECRET_SETTING==='yes'"), inputs: ['lib'], env: ['SECRET_SETTING'] },
+  ], { 'lib/a.txt': 'a\n' });
+
+  let out = repo.run(['run'], { SECRET_SETTING: 'yes' });
+  assert.equal(out.status, 0, out.stdout);
+  assert.match(out.stdout, /blind: pass/, 'a variable the check did not name is withheld from it');
+  assert.match(out.stdout, /needs: pass/);
+
+  const elsewhere = checkout('environment-2', [
+    { name: 'needs', run: exits("process.env.SECRET_SETTING==='yes'"), inputs: ['lib'], env: ['SECRET_SETTING'] },
+  ], { 'lib/a.txt': 'a\n' });
+  out = elsewhere.run(['run'], { SECRET_SETTING: '' });
+  assert.match(out.stdout, /needs: cannot run here: it needs SECRET_SETTING/);
+  assert.match(out.stdout, /1 check: 0 ran, 0 reused, 1 skipped/);
+  assert.equal(out.status, 0, 'a check this machine cannot run is skipped');
+  assert.equal(elsewhere.run(['run', '--strict'], { SECRET_SETTING: '' }).status, 1, 'unless every check is demanded');
+  assert.equal(elsewhere.run(['run', 'needs'], { SECRET_SETTING: '' }).status, 1, 'or that check was asked for by name');
+});
+
+test('the declared tools are part of the key, and a machine without them does not run the check', async () => {
+  const { actionKey } = await import('../web/checks.js');
+  const one = { name: 'c', run: 'x', inputs: ['lib'], tools: [{ run: 'node --version', expect: 'v22.' }] };
+  const two = { ...one, tools: [{ run: 'node --version', expect: 'v23.' }] };
+  const key = async (definition) => actionKey(parseChecks(JSON.stringify({ checks: [definition] })).get('c'), async () => ({ mode: '40000', id: 'a'.repeat(40) }));
+  assert.notEqual(await key(one), await key(two), 'naming another version names another check');
+  assert.notEqual(await key(one), await key({ ...one, env: ['X'] }), 'so does naming an environment variable');
+  assert.equal(await key(one), await key({ ...one, keep: ['target'] }), 'what is kept between runs is not part of the key');
+
+  const repo = checkout('tools', [
+    { name: 'wrong', run: TICK, inputs: ['lib'], env: ['COUNT'], tools: [{ run: 'node --version', expect: 'v0.0.' }] },
+    { name: 'absent', run: TICK, inputs: ['lib'], env: ['COUNT'], tools: [{ run: 'no-such-tool-anywhere --version', expect: '1' }] },
+  ], { 'lib/a.txt': 'a\n' });
+  const out = repo.run(['run']);
+  assert.match(out.stdout, /wrong: cannot run here: `node --version` prints "v\d+/);
+  assert.match(out.stdout, /absent: cannot run here: `no-such-tool-anywhere --version` did not run here/);
+  assert.equal(repo.runs(), 0, 'neither check ran');
+});
+
+test('a stored result is not reused once a tool prints something else', () => {
+  // The "tool" is a command whose output the test controls through a variable the check names.
+  const repo = checkout('drift', [
+    { name: 'built', run: TICK, inputs: ['lib'], env: ['COUNT', 'TOOL_VERSION'], tools: [{ run: 'node -e "console.log(process.env.TOOL_VERSION)"', expect: 'tool ' }] },
+  ], { 'lib/a.txt': 'a\n' });
+  repo.run(['run'], { TOOL_VERSION: 'tool 1.0' });
+  repo.run(['run'], { TOOL_VERSION: 'tool 1.0' });
+  assert.equal(repo.runs(), 1, 'the same tool: reused');
+  const out = repo.run(['run'], { TOOL_VERSION: 'tool 1.1' });
+  assert.equal(repo.runs(), 2, 'a different tool: run again');
+  assert.match(out.stdout, /built: pass in/);
 });

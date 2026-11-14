@@ -190,16 +190,23 @@ Measured on this repository:
 - Replaying the 26 commits to that point with today's definitions: 78 check runs if every check runs on every commit, 30 with reuse. 62 percent avoided, about 2.6 times fewer.
 - That is far from 100 times. This history is short and most of its commits changed code that a check reads. The figure will be higher where changes are small against a large codebase, and it should be measured there, not assumed.
 
-Tested in `test/checks.test.mjs`, eleven tests: the key ignores paths a check does not read; a required check blocks a merge until its result exists; a change touching nothing the check reads merges on the earlier result with nothing run; a failure does not count and a later pass marks the key; a change cannot weaken its own check; a result from someone since revoked stops counting; a check the branch does not define cannot be met; a forged merge without the check is refused by every clone; the runner end to end; and the command in a plain git checkout, including a revert that runs nothing.
+Tested in `test/checks.test.mjs`, fifteen tests: the key ignores paths a check does not read; a required check blocks a merge until its result exists; a change touching nothing the check reads merges on the earlier result with nothing run; a failure does not count and a later pass marks the key; a change cannot weaken its own check; a result from someone since revoked stops counting; a check the branch does not define cannot be met; a forged merge without the check is refused by every clone; the runner end to end; the command in a plain git checkout, including a revert that runs nothing; an undeclared input failing; an unnamed environment variable withheld; a missing tool or variable skipping the check; and a stored result not reused once a tool changes.
 
-What this does not do, and where it can be wrong:
+What a check can depend on is now what its key covers:
 
-- **Undeclared inputs.** A check that reads a path it did not list can be wrongly reused. Nothing stops a check from reading other files; the definitions here list whole directories to make that unlikely.
-- **The toolchain is not in the key.** A result made with one compiler version is reused under another. The key should include it; today it does not.
-- **The environment is not in the key.** The page check runs four more tests when a real store is configured than when it is not, under the same key.
-- **Nothing isolates a check.** It can use the network, the clock and randomness, so a nondeterministic check is cached as if it were not.
+- **Inputs.** A check runs in a directory holding only the paths it declared, as committed. A check that reads a file it did not declare fails there, instead of passing and being wrongly reused later. Running this repository's own checks that way confirmed their declarations: the engine tests and all the page tests pass with nothing else present.
+- **Tools.** A definition names each tool it relies on and the start of what that tool prints, such as `cargo 1.`. That expectation is in the key. A machine whose tool prints something else does not run the check at all, and a result stored on disk is reused only while the tools print exactly what they printed when it was made.
+- **Environment.** A check gets a small fixed set of variables and those it named, nothing else. A check that needs a variable this machine lacks is skipped here, not failed. The page tests and the tests against a real store are now two checks, `page` and `store`, because they differ in what they need.
+
+What remains open:
+
+- **It is not a sandbox.** A check can still read outside its directory on purpose, use the network and read the clock. The accidental cases are closed, not the deliberate ones. A nondeterministic check is still cached as if it were not.
+- **A failure caused by the machine is stored like any other.** A full disk or a network outage looks the same as a broken test. `--retry` runs stored failures again. This bit during development: the first isolated run failed because Windows limits path length, and the failure was cached until removed.
+- **Tool expectations are prefixes chosen by the author.** `cargo 1.` accepts every 1.x compiler. Tighter is safer and reused less.
+- **Directories kept between runs are not in the key.** Build output and downloaded packages are kept for speed, on the assumption that they never change a result.
 - **Trust is coarse.** Any key with write access can publish a result. There is no separate list of trusted runners and no requirement that two runners agree.
-- **Checks run whole.** There is no reuse inside a check: one changed test file reruns every test in that check.
+- **Checks run whole.** One changed test file reruns every test in that check.
+- **Isolation costs time.** Each check builds in its own directory, so a first run is slower than building in place.
 - **Results in CI live in GitHub's cache**, which expires and is not shared with anyone's own machine.
 
 ## Pull requests and the merge gate
@@ -280,10 +287,10 @@ Tested: the engine's marked output is byte for byte what `git merge-file` prints
 
 ## Automated tests
 
-Every push runs the checks that have no result for its content before anything is deployed. A failure stops the deploy. The checks are the two suites below and Lean's verification of the model.
+Every push runs the checks that have no result for its content before anything is deployed. A failure stops the deploy. The checks are the suites below, split by what they need, and Lean's verification of the model.
 
 - `engine/tests`: fourteen tests of the engine against git (objects, packs, deltas, diff, blame, merge, written objects, packs and bundles).
-- `test/page.test.mjs`, `test/merge.test.mjs`, `test/s3.test.mjs`, `test/protect.test.mjs`, `test/pulls.test.mjs` and `test/checks.test.mjs`: fifty-nine tests of the page's own modules (four of them against a real S3-compatible store), run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
+- `test/page.test.mjs`, `test/merge.test.mjs`, `test/s3.test.mjs`, `test/protect.test.mjs`, `test/pulls.test.mjs` and `test/checks.test.mjs`: sixty-three tests of the page's own modules (four of them against a real S3-compatible store), run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
 
 What the page tests cover: clone matches git object for object; history, changed paths and line counts match `git show --numstat`; blame matches `git blame`; altered stored bytes are refused; a commit made here is pulled and `fsck`ed by git; push sends only what is missing and git accepts what the replica holds; a tampered object, log record or head is refused; grant, use, escalation, revocation and expiry between two devices; a validly signed forgery written straight to the store; a broken chain and a record from another repository.
 

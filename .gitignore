@@ -11,3 +11,5 @@ web/sw.js
 .replica/
 .s3-config.tmp.json
 .holo/results/
+.holo/work/
+.holo/runner-key.json
