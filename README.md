@@ -167,6 +167,32 @@ Limits:
 - Two people pushing at once: the second is told to fetch; see Fetch and merge.
 - The proofs cover the access rules. Assembling the request (reading the log, checking signatures, choosing which grant applies) is page code, tested by hand only.
 
+## Pull requests and the merge gate
+
+A thin first version: only what approvals and checks need to attach to.
+
+- A pull request is a signed record proposing one commit for a branch. It moves nothing. In the editor, "Propose as a pull request" makes the commit and the record.
+- An approval is a signed record for one exact commit on one branch. It says nothing about any other commit, so bringing a pull request up to date, which makes a new commit, needs a new approval.
+- Merging moves the branch to exactly the proposed commit. No merge commit is made at merge time, so nothing unreviewed can ride along. A pull request that is behind the branch must be brought up to date first.
+- A protected branch can require a number of approvals. Then nobody commits to it directly, the owner included.
+- An approval counts only if it comes from someone other than the proposer who can still write at the moment of the merge.
+- A pull request's number is its place among pull requests in the signed log, which everyone folds the same way. Numbers need no server.
+
+Proved in the kernel, for any evidence: fewer approvals than required never merges, and fewer checks than required never merges. The checks half is in place for the next step and always sees zero required today. Counting the approvals that qualify is page code; the kernel proves what follows from the count.
+
+Kernel guest: SHA-256 `c61abc2421a4151dfa2a3906caec28ed28a8762b67463074b9aaf264750de625`, from commit `854e248`, run https://github.com/humuhumu33/holo-git/actions/runs/43552793784, holo fingerprint `blake3:6b571f3f916a737b9f929c396d384549132c1996f96212c1c36664b20c9df0d8`, 44 of 44 acceptance vectors. The model has 31 theorems in 16 modules.
+
+Tested in `test/pulls.test.mjs`, eight tests among three devices: a proposal travels without moving the branch; no direct commits where approvals are required; a self-approval does not count; an approval does not carry to an updated commit; an approval from someone since revoked stops counting; a merge without approvals, signed by a writer and written straight to the store, is refused by every clone; a fresh clone reaches the same numbers and states and git's `fsck` accepts the repository. By hand in the browser: propose, list, view with diff, self-approve, and the refusals of merge and direct commit.
+
+Not done:
+
+- No discussion: no comments, no review of individual lines, no closing a pull request without merging.
+- One commit per proposal from the editor; a pull request is one commit, not a branch that grows.
+- Bringing up to date stops at a conflict; the resolve screen is not wired to it.
+- The refusal message names the kernel, not the reason. It should say how many approvals are missing.
+- A pull request needs its proposer to be able to write to the store, since the commit must be uploaded. Proposing from a fork does not exist.
+- "Approvals do not permit a rewind" could not be proved as one statement; the rewind rule is proved in `Protect` and an acceptance vector covers the combination.
+
 ## Protected branches
 
 The owner can protect a branch. It then only moves forward, and only for those the rule names: anyone with write access, or the owner alone.
@@ -177,11 +203,11 @@ The owner can protect a branch. It then only moves forward, and only for those t
 - A clone judges the log twice: once to learn what to fetch, then strictly once the history is there. It also fetches commits a protected branch passed through that a later rewind left unreachable, so that every protected move can be checked.
 - An unprotected branch can be rewound by anyone with write access, as in git. A test records this.
 
-Kernel guest: SHA-256 `62c92fc7785d663a24833f172ae6c130f214a40aa0ae388db7bbed6a750b5881`, from commit `cf72707`, run https://github.com/humuhumu33/holo-git/actions/runs/43550335794, holo fingerprint `blake3:0b299948f9510dc2821d030a4b5eea6b44972247fc93c23ddb3cd6b56c6081e3`, 34 of 34 acceptance vectors. The model has 29 theorems in 14 modules.
+The kernel guest now in the page is recorded under Pull requests and the merge gate. This section's rules were first built into the guest from commit `cf72707`.
 
 Tested in `test/protect.test.mjs`, ten tests: only the owner can protect or unprotect; a writer still moves a protected branch forward; a rewind signed by a key with write access and written straight to the store is refused by every clone; the owner cannot rewind either; a merge counts as moving forward; an owner-only branch refuses a writer; removal restores access.
 
-Not done: required approvals and required checks, which need pull requests; protected tags; patterns such as `release/*`; and deleting a branch, which does not exist at all yet.
+Not done: required checks, which come next; protected tags; patterns such as `release/*`; and deleting a branch, which does not exist at all yet.
 
 ## Fetch and merge
 
@@ -222,7 +248,7 @@ Tested: the engine's marked output is byte for byte what `git merge-file` prints
 Every push runs two suites before anything is deployed. A failure stops the deploy.
 
 - `engine/tests`: fourteen tests of the engine against git (objects, packs, deltas, diff, blame, merge, written objects, packs and bundles).
-- `test/page.test.mjs`, `test/merge.test.mjs`, `test/s3.test.mjs` and `test/protect.test.mjs`: forty tests of the page's own modules (four of them against a real S3-compatible store), run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
+- `test/page.test.mjs`, `test/merge.test.mjs`, `test/s3.test.mjs`, `test/protect.test.mjs` and `test/pulls.test.mjs`: forty-eight tests of the page's own modules (four of them against a real S3-compatible store), run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
 
 What the page tests cover: clone matches git object for object; history, changed paths and line counts match `git show --numstat`; blame matches `git blame`; altered stored bytes are refused; a commit made here is pulled and `fsck`ed by git; push sends only what is missing and git accepts what the replica holds; a tampered object, log record or head is refused; grant, use, escalation, revocation and expiry between two devices; a validly signed forgery written straight to the store; a broken chain and a record from another repository.
 

@@ -12,7 +12,7 @@
 import { parseCommit, open, makeObject, makeTree, makeCommit, mergeLines } from './engine.js';
 import { fold } from './log.js';
 import { recordDigest } from './records.js';
-import { extend, deviceKey } from './identity.js';
+import { extend, deviceKey, openPull } from './identity.js';
 import { readState, fetchLog, fetchMissing } from './replica.js';
 import { getObject, putObjects, listRefUpdates, getRefs, adoptLog } from './store.js';
 import { readTree, person } from './git.js';
@@ -140,7 +140,7 @@ export async function fetchFrom(repo, branch, base, who = {}, report = () => {},
   if (shared === remote.length) return { outcome: 'ahead', head: (await getRefs(repo.name))[ref], unpushed: local.length - shared };
 
   // The head's history, and any commit a protected branch passed through that is no longer reachable from it.
-  const fetched = await fetchMissing(base, [remoteHead, ...remoteState.unverified], report);
+  const fetched = await fetchMissing(base, [remoteHead, ...remoteState.unverified, ...remoteState.pulls.map((pull) => pull.head)], report);
   await fold(remote, { strict: true }); // with the history here, nothing about a protected branch is left unchecked
   const localHead = (await getRefs(repo.name))[ref];
   const extra = local.slice(shared);
@@ -186,4 +186,23 @@ export async function fetchFrom(repo, branch, base, who = {}, report = () => {},
   const records = await extend(repo.name, remote, steps);
   await adoptLog(repo.name, records, { [ref]: head });
   return { outcome, head, fetched, reissued: steps.length };
+}
+
+// Bring a pull request up to date: merge the branch into the proposed commit and propose the
+// result. It is a new commit, so approvals of the old one do not carry over to it.
+export async function updatePull({ repo, refs, branch, head, title, who = {} }) {
+  const ref = `refs/heads/${branch}`;
+  const baseHead = refs[ref];
+  if ((await ancestors(head)).has(baseHead)) throw new Error('this pull request is already up to date');
+  const baseCommit = await mergeBase(head, baseHead);
+  const tree = (id) => getObject(id).then((envelope) => parseCommit(envelope).tree);
+  const context = { conflicts: [], made: [], resolutions: new Map() };
+  const merged = await mergeTrees(baseCommit ? await tree(baseCommit) : null, await tree(head), await tree(baseHead), '', context, true);
+  if (context.conflicts.length) throw new Error(`it conflicts with the branch in: ${context.conflicts.map((detail) => detail.path).join(', ')}`);
+  const line = identityLine(who.name || '', who.email || '', Date.now());
+  const commit = makeCommit({ tree: merged, parents: [head, baseHead], author: line, committer: line, message: `Bring up to date with ${branch}\n` });
+  context.made.push(commit);
+  await putObjects(context.made);
+  await openPull(repo.name, branch, commit.id, title);
+  return { id: commit.id };
 }

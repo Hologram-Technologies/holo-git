@@ -14,6 +14,7 @@ These are waits measured in this project, not estimates. They are the problem in
 | Settling axiom lists | One full verification per wrong list | The verifier reports one mismatch per run; one change took six runs |
 | Page deploy checks | About a minute | Engine and page tests all run again for a README change |
 | Finding the right build | One failed attempt | The build tool picked up another workflow's run for the same commit |
+| Three kernel builds for three small rule changes | About 30 minutes in all | Each rebuilt every module; each change touched one or two |
 
 None of these waits is the first time a piece of work is done. Every one is work being done again, or a queue.
 
@@ -32,7 +33,7 @@ For a change that touches one file out of many, most checks are in the first cat
 ## Order of work
 
 1. **Protected branches.** Done.
-2. **Thin pull requests.** A pull request is a signed record naming a base and a head. An approval is a signed record bound to the exact tree it approved. The merge gate is one kernel decision: the required approvals and the required checks exist for this tree. Only what checks need to attach to; no discussion threads yet.
+2. **Thin pull requests.** Done. A pull request is a signed record naming a base and a head. An approval is a signed record bound to the exact tree it approved. The merge gate is one kernel decision: the required approvals and the required checks exist for this tree. Only what checks need to attach to; no discussion threads yet.
 3. **Checks keyed by content.** A check result is a signed record stored under a key derived from the step, the labels of the subtrees it reads, and the toolchain. Before running anything, look the key up. The first workload is this repository:
    - engine tests, keyed on `engine/`;
    - page tests, keyed on `web/`, `test/` and the two WebAssembly files;

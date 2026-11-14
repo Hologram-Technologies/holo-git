@@ -4,10 +4,11 @@ import { loadEngine, open, diffLines, blameLines, splitLines } from './engine.js
 import { openStore, getObject, getRepo, getRefs, listRepos, countObjects, stats, corruptObject, setRepo } from './store.js';
 import { startShell } from './shell.js';
 import { loadKernel, decisions } from './kernel.js';
-import { checkLog, deviceKey, grant, revoke, protect, unprotect } from './identity.js';
+import { checkLog, deviceKey, grant, revoke, protect, unprotect, approve } from './identity.js';
+import { isAncestor } from './ancestry.js';
 import { push, setCredentials, hasCredentials } from './replica.js';
-import { fetchFrom } from './sync.js';
-import { clone, resolveCommit, readTree, lookup, history, changedPaths, person, fileVersions, commitFile, bundleOf } from './git.js';
+import { fetchFrom, updatePull } from './sync.js';
+import { clone, resolveCommit, readTree, lookup, history, changedPaths, person, fileVersions, commitFile, bundleOf, proposeFile, mergePull } from './git.js';
 
 const main = document.getElementById('main');
 const status = document.getElementById('status');
@@ -48,6 +49,7 @@ function header(repo, refs, ref, tab) {
     el('nav', { class: 'tabs' },
       el('a', { href: `#/${repo.name}/tree/${enc(ref)}`, class: tab === 'code' ? 'on' : '' }, 'Code'),
       el('a', { href: `#/${repo.name}/commits/${enc(ref)}`, class: tab === 'commits' ? 'on' : '' }, 'Commits'),
+      el('a', { href: `#/${repo.name}/pulls/${enc(ref)}`, class: tab === 'pulls' ? 'on' : '' }, 'Pull requests'),
       select));
 }
 
@@ -228,11 +230,13 @@ async function editPage(repo, refs, ref, path) {
     try {
       remember('holo-git-name', name.value);
       remember('holo-git-email', email.value);
-      const made = await commitFile({ repo, refs, branch: ref, path, content: new TextEncoder().encode(area.value),
+      const propose = event.submitter && event.submitter.value === 'propose';
+      const made = await (propose ? proposeFile : commitFile)({ repo, refs, branch: ref, path, content: new TextEncoder().encode(area.value),
         message: message.value || message.getAttribute('placeholder'), name: name.value, email: email.value });
-      location.hash = `#/${repo.name}/commit/${made.id}`;
+      location.hash = propose ? `#/${repo.name}/pulls/${enc(ref)}` : `#/${repo.name}/commit/${made.id}`;
     } catch (error) { note.textContent = error.message; note.className = 'error'; }
-  } }, area, message, name, email, el('button', {}, `Commit to ${ref}`));
+  } }, area, message, name, email,
+  el('p', { class: 'push' }, el('button', { value: 'commit' }, `Commit to ${ref}`), el('button', { value: 'propose' }, 'Propose as a pull request')));
   main.replaceChildren(header(repo, refs, ref, 'code'), crumbs(repo, ref, path, 'blob'), form, note);
 }
 
@@ -274,6 +278,70 @@ async function resolvePage(repo, refs, ref) {
     el('h2', {}, `${result.details.length} conflict${result.details.length === 1 ? '' : 's'} to resolve`), form, note);
 }
 
+const keyName = (key, mine, owner) => `${key.slice(0, 8)}${key === mine ? ' (this device)' : ''}${key === owner ? ' (owner)' : ''}`;
+
+async function pullsPage(repo, refs, ref) {
+  const log = await checkLog(repo.name);
+  if (!log.valid) throw new Error(`This repository's signed log does not verify: ${log.reason}`);
+  const mine = (await deviceKey()).id;
+  const rows = [...log.state.pulls].reverse().map((pull) => el('tr', {},
+    el('td', {}, link(`#/${repo.name}/pull/${pull.number}`, `#${pull.number} ${pull.title}`)),
+    el('td', { class: 'muted' }, keyName(pull.author, mine, log.state.owner)),
+    el('td', { class: 'muted' }, pull.ref.slice(11)),
+    el('td', {}, pull.merged ? 'merged' : `open · ${pull.counted} of ${pull.needed} approvals`)));
+  main.replaceChildren(header(repo, refs, ref, 'pulls'),
+    rows.length ? el('table', { class: 'files' }, rows) : el('p', { class: 'muted' }, 'No pull requests. Edit a file and choose "Propose as a pull request".'));
+}
+
+async function pullPage(repo, refs, number) {
+  const log = await checkLog(repo.name);
+  if (!log.valid) throw new Error(`This repository's signed log does not verify: ${log.reason}`);
+  const pull = log.state.pulls.find((candidate) => String(candidate.number) === String(number));
+  if (!pull) throw new Error(`There is no pull request #${number}.`);
+  const branch = pull.ref.slice(11);
+  const mine = (await deviceKey()).id;
+  const baseHead = refs[pull.ref];
+  const upToDate = pull.merged || await isAncestor(baseHead, pull.head) === true;
+  // What it changes: from the point where it left the branch to the proposed commit.
+  const onBranch = new Set();
+  for (const queue = [baseHead]; queue.length;) {
+    const id = queue.pop();
+    if (onBranch.has(id)) continue;
+    onBranch.add(id);
+    queue.push(...(await resolveCommit(refs, id)).commit.parents);
+  }
+  const head = (await resolveCommit(refs, pull.head)).commit;
+  let fork = head.parents[0];
+  while (fork && !onBranch.has(fork)) fork = (await resolveCommit(refs, fork)).commit.parents[0];
+  const forkTree = fork ? (await resolveCommit(refs, fork)).commit.tree : null;
+  const changes = await changedPaths(forkTree, head.tree);
+  const sections = [];
+  for (const change of changes) {
+    sections.push(el('section', { class: 'file' },
+      el('h3', {}, el('span', { class: `st ${change.status}` }, change.status), ' ', change.path), await fileDiff(change, forkTree, head.tree)));
+  }
+  const note = el('span', { class: 'muted' });
+  const act = (label, work) => el('button', { onclick: async () => {
+    try { await work(); window.dispatchEvent(new HashChangeEvent('hashchange')); } catch (error) { note.textContent = ` ${error.message}`; }
+  } }, label);
+  const who = { name: saved('holo-git-name'), email: saved('holo-git-email') };
+  const approvers = [...pull.approvals].map((key) => keyName(key, mine, log.state.owner) + (key === pull.author ? ', does not count: the proposer' : ''));
+  const actions = pull.merged ? [] : [
+    pull.approvals.has(mine) ? '' : act('Approve this commit', () => approve(repo.name, branch, pull.head)),
+    upToDate ? act('Merge', async () => { const merged = await mergePull({ repo, refs, branch, head: pull.head }); location.hash = `#/${repo.name}/commit/${merged.id}`; })
+      : act(`Bring up to date with ${branch}`, async () => { await updatePull({ repo, refs, branch, head: pull.head, title: pull.title, who }); location.hash = `#/${repo.name}/pulls/${enc(branch)}`; }),
+  ];
+  main.replaceChildren(header(repo, refs, branch, 'pulls'),
+    el('h2', {}, `#${pull.number} ${pull.title}`),
+    el('p', {}, pull.merged ? 'Merged' : 'Open', el('span', { class: 'muted' }, ` · into ${branch} · proposed by ${keyName(pull.author, mine, log.state.owner)} on ${when(pull.time)}`)),
+    el('p', { class: 'mono muted' }, 'commit ', link(`#/${repo.name}/commit/${pull.head}`, short(pull.head)),
+      upToDate ? '' : ` · behind ${branch}: it must be brought up to date before it can merge`),
+    el('p', {}, `Approvals that count: ${pull.counted} of ${pull.needed} required.`,
+      el('span', { class: 'muted' }, approvers.length ? ` Approved by ${approvers.join('; ')}.` : ' Nobody has approved this commit.')),
+    el('p', { class: 'push' }, actions, note),
+    el('h2', {}, `${changes.length} changed file${changes.length === 1 ? '' : 's'}`), ...sections);
+}
+
 async function accessTools(repo, log, branch) {
   const key = await deviceKey();
   const mine = el('input', { type: 'text', readonly: '', 'aria-label': 'This device\'s key', value: key.id });
@@ -304,10 +372,11 @@ async function accessTools(repo, log, branch) {
   const who = el('select', { 'aria-label': 'Who may change the protected branch' },
     el('option', { value: 'write' }, 'anyone with write access'), el('option', { value: 'admin' }, 'the owner only'));
   if (rule) who.value = rule.minimum;
+  const needs = el('input', { type: 'number', min: '0', max: '200', 'aria-label': 'Approvals required to change the branch', value: String(rule ? rule.approvals : 0) });
   const guard = el('p', { class: 'push' },
-    el('span', {}, rule ? `${branch} is protected: it only moves forward, for ${rule.minimum === 'admin' ? 'the owner only' : 'anyone with write access'}.` : `${branch} is not protected: anyone with write access can rewind it.`),
-    who,
-    el('button', { onclick: async () => { try { await protect(repo.name, branch, who.value); rerender(); } catch (error) { note.textContent = ` ${error.message}`; } } }, rule ? 'Change' : 'Protect'),
+    el('span', {}, rule ? `${branch} is protected: it only moves forward, for ${rule.minimum === 'admin' ? 'the owner only' : 'anyone with write access'}, with ${rule.approvals} approval${rule.approvals === 1 ? '' : 's'} required.` : `${branch} is not protected: anyone with write access can rewind it.`),
+    who, el('span', { class: 'muted' }, 'approvals required:'), needs,
+    el('button', { onclick: async () => { try { await protect(repo.name, branch, who.value, Number(needs.value) || 0); rerender(); } catch (error) { note.textContent = ` ${error.message}`; } } }, rule ? 'Change' : 'Protect'),
     rule ? el('button', { onclick: async () => { try { await unprotect(repo.name, branch); rerender(); } catch (error) { note.textContent = ` ${error.message}`; } } }, 'Remove protection') : '');
   return el('details', { class: 'access' }, el('summary', {}, 'Access'),
     el('p', {}, role), guard, el('p', { class: 'push' }, el('span', { class: 'muted' }, 'This device\'s key:'), mine),
@@ -423,6 +492,8 @@ async function route() {
       else if (view === 'blame') await blamePage(repo, refs, target, path);
       else if (view === 'edit') await editPage(repo, refs, target, path);
       else if (view === 'resolve') await resolvePage(repo, refs, target);
+      else if (view === 'pulls') await pullsPage(repo, refs, target);
+      else if (view === 'pull') await pullPage(repo, refs, target);
       else await tree(repo, refs, target, path);
     }
   } catch (error) {

@@ -123,8 +123,10 @@ export async function push(repo, branch, base, report = () => {}) {
   // Send only what the replica cannot already have: everything new since its head.
   // The replica's head is where its own log leads; the last record may be a grant, not a change.
   const remoteHead = remote.length ? (await fold(remote)).heads[ref] : null;
-  const have = remoteHead ? await closure([remoteHead]) : new Set();
-  const send = [...await closure([local.head], have)];
+  // Proposed commits travel too, so a pull request can be read by whoever fetches the log.
+  const remoteWanted = remote.length ? (await fold(remote)).pulls.map((pull) => pull.head) : [];
+  const have = remoteHead ? await closure([remoteHead, ...remoteWanted]) : new Set();
+  const send = [...await closure([local.head, ...folded.pulls.map((pull) => pull.head)], have)];
   let bytes = 0;
   let done = 0;
   await inParallel(send, 8, async (id) => {
@@ -161,7 +163,7 @@ export async function cloneReplica(base, name, state, report = () => {}) {
 
   let stored = 0;
   let bytes = 0;
-  const queue = Object.values(refs);
+  const queue = [...Object.values(refs), ...folded.pulls.map((pull) => pull.head)];
   const seen = new Set();
   while (queue.length) {
     const id = queue.pop();

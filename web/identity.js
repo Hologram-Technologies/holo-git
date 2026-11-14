@@ -73,15 +73,32 @@ export async function checkLog(repo) {
 
 // Protect a branch: it can then only move forward, and only for those `minimum` names
 // ('write': anyone with write access; 'admin': the owner alone).
-export async function protect(repo, branch, minimum) {
+export async function protect(repo, branch, minimum, approvals = 0) {
   if (!PUSHERS.includes(minimum)) throw new Error('a protected branch is open to writers or to the owner only');
-  const record = await sign(repo, { type: 'protect', ref: `refs/heads/${branch}`, minimum });
+  if (!Number.isInteger(approvals) || approvals < 0 || approvals > 200) throw new Error('required approvals must be a whole number from 0 to 200');
+  const record = await sign(repo, { type: 'protect', ref: `refs/heads/${branch}`, minimum, approvals });
   await appendRecord(repo, record);
   return record;
 }
 
 export async function unprotect(repo, branch) {
   const record = await sign(repo, { type: 'unprotect', ref: `refs/heads/${branch}` });
+  await appendRecord(repo, record);
+  return record;
+}
+
+// Propose a commit for a branch. Anyone with read access can; it changes nothing by itself.
+export async function openPull(repo, branch, head, title) {
+  title = title.replace(/[\n\r]/g, ' ').trim().slice(0, 200);
+  if (!title) throw new Error('a pull request needs a title');
+  const record = await sign(repo, { type: 'pr', ref: `refs/heads/${branch}`, head, title });
+  await appendRecord(repo, record);
+  return record;
+}
+
+// Approve exactly this commit for this branch. An approval says nothing about any other commit.
+export async function approve(repo, branch, head) {
+  const record = await sign(repo, { type: 'approve', ref: `refs/heads/${branch}`, head });
   await appendRecord(repo, record);
   return record;
 }

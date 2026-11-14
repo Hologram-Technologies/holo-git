@@ -2,7 +2,8 @@
 // the replica only has to serve files (git's "dumb" HTTP layout).
 
 import { readPack, readLoose, parseCommit, parseTree, open, makeObject, makeTree, makeCommit, makeBundle } from './engine.js';
-import { moveRef } from './identity.js';
+import { moveRef, openPull } from './identity.js';
+import { isAncestor } from './ancestry.js';
 import { cloneReplica, PROTOCOL, replicaFetch } from './replica.js';
 import { putObjects, hasObject, getObject, putRepo } from './store.js';
 
@@ -257,4 +258,35 @@ export async function bundleOf(refs, branch) {
   if (!id) throw new Error(`${branch} is not a branch`);
   const envelopes = await reachable(id);
   return { bytes: makeBundle(`refs/heads/${branch}`, id, envelopes), objects: envelopes.length, id };
+}
+
+// Propose one file change as a pull request: the commit is made and stored, the branch does not move.
+export async function proposeFile({ repo, refs, branch, path, content, message, name, email }) {
+  const ref = `refs/heads/${branch}`;
+  const old = refs[ref];
+  if (!old) throw new Error(`${branch} is not a branch`);
+  if (!clean(name) || !clean(email)) throw new Error('a name and an email are needed to commit');
+  if (!message.trim()) throw new Error('a commit message is needed');
+  const parent = parseCommit(await getObject(old));
+  const blob = makeObject('blob', content);
+  const made = [blob];
+  const tree = await rewrite(parent.tree, path.split('/').filter(Boolean), blob.id, made);
+  if (tree === parent.tree) throw new Error('nothing changed');
+  const who = identityLine(name, email, Date.now());
+  const commit = makeCommit({ tree, parents: [old], author: who, committer: who, message: `${message.trim()}\n` });
+  made.push(commit);
+  await putObjects(made);
+  await openPull(repo.name, branch, commit.id, message.trim().split('\n')[0]);
+  return { id: commit.id };
+}
+
+// Merge a pull request: move the branch to exactly the proposed commit. The branch must not have
+// moved past it; the kernel decides whether the approvals are enough.
+export async function mergePull({ repo, refs, branch, head }) {
+  const ref = `refs/heads/${branch}`;
+  const old = refs[ref];
+  if (old === head) throw new Error('already merged');
+  if (await isAncestor(old, head) !== true) throw new Error('this pull request is behind the branch; bring it up to date first');
+  await moveRef({ repo: repo.name, ref, old, next: head, parents: [old] });
+  return { id: head };
 }

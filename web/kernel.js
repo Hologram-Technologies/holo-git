@@ -89,3 +89,36 @@ export function refUpdate({ signed, required, links, now, fastForward, forceAllo
   request[68] = forceAllowed === true ? 1 : 0;
   return ask(request) === 'allow';
 }
+
+// Operation 8, the merge gate: operation 7, and also enough approvals and every required check.
+// The counts are the host's evidence. The kernel proves: fewer approvals than needed, or fewer
+// checks than needed, is a refusal, whoever asks.
+export function gate({ signed, required, links, now, fastForward, forceAllowed, approvalsHave, approvalsNeeded, checksHave, checksNeeded }) {
+  if (links.length > 5) return false;
+  const counts = [approvalsHave, approvalsNeeded, checksHave, checksNeeded];
+  if (counts.some((n) => !Number.isInteger(n) || n < 0)) return false;
+  const request = new Uint8Array(73);
+  const view = new DataView(request.buffer);
+  request[0] = 8;
+  request[1] = signed ? 1 : 0;
+  request[2] = required;
+  request[3] = MODE.owner;
+  for (let i = 0; i < 5; i += 1) {
+    const link = links[i] || { scope: MODE.owner, signed: true, revoked: false, notAfter: null };
+    const at = 4 + 11 * i;
+    request[at] = link.scope;
+    request[at + 1] = link.signed ? 1 : 0;
+    request[at + 2] = link.revoked ? 1 : 0;
+    view.setBigUint64(at + 3, link.notAfter == null ? 0xffffffffffffffffn : BigInt(link.notAfter));
+  }
+  view.setBigUint64(59, BigInt(now));
+  request[67] = fastForward === true ? 1 : 0;
+  request[68] = forceAllowed === true ? 1 : 0;
+  // One byte each. More than 255 given is still "enough"; more than 255 needed cannot be asked for.
+  request[69] = Math.min(approvalsHave, 255);
+  request[70] = approvalsNeeded > 255 ? 255 : approvalsNeeded;
+  request[71] = Math.min(checksHave, 255);
+  request[72] = checksNeeded > 255 ? 255 : checksNeeded;
+  if (approvalsNeeded > 255 || checksNeeded > 255) return false;
+  return ask(request) === 'allow';
+}
