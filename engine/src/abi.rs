@@ -229,6 +229,25 @@ pub unsafe extern "C" fn eng_bundle(pointer: *const u8, length: usize) -> *mut u
     }))
 }
 
+/// Buffers `[base, ours, theirs]` in; `[clean: u8][merged bytes]` out. The bytes are present only when clean.
+///
+/// # Safety
+/// `pointer..pointer+length` must be readable.
+#[no_mangle]
+pub unsafe extern "C" fn eng_merge(pointer: *const u8, length: usize) -> *mut u8 {
+    reply(buffers(input(pointer, length)).and_then(|parts| {
+        let [base, ours, theirs] = parts[..] else { return Err(Error::Truncated) };
+        let merged = crate::merge::merge(base, ours, theirs);
+        if merged.conflicts > 0 {
+            return Ok(vec![0]);
+        }
+        let mut out = Vec::with_capacity(1 + merged.bytes.len());
+        out.push(1);
+        out.extend_from_slice(&merged.bytes);
+        Ok(out)
+    }))
+}
+
 /// Tree envelope in; JSON out.
 ///
 /// # Safety

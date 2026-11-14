@@ -17,15 +17,24 @@ export async function deviceKey() {
 
 // Sign a new record on top of this repository's log. Nothing is stored unless the whole log,
 // with the new record at its end, still folds: signatures hold and the kernel allows every record.
-async function sign(repo, fields) {
+async function signOn(log, repo, fields) {
   const key = await deviceKey();
-  const log = await listRefUpdates(repo);
   const before = await fold(log);
   // The log keeps the name it was started under, whatever this clone is called locally.
   const record = { ...fields, repo: log.length ? log[0].repo : repo, time: Date.now(), key: key.id, publicKey: key.publicKey, previous: before.digest };
   record.signature = b64(await crypto.subtle.sign(SIGN, key.pair.privateKey, statement(record)));
   await fold([...log, record]);
   return record;
+}
+
+const sign = async (repo, fields) => signOn(await listRefUpdates(repo), repo, fields);
+
+// Sign a series of records on top of a given log, each on the one before. Used when this
+// device's unpushed records are issued again after fetching. Returns the whole new log.
+export async function extend(repo, log, steps) {
+  const out = [...log];
+  for (const fields of steps) out.push(await signOn(out, repo, fields));
+  return out;
 }
 
 export async function moveRef({ repo, ref, old, next, parents }) {

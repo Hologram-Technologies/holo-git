@@ -27,7 +27,7 @@ export async function readState(base) {
 }
 
 // Follow `previous` links back from a record digest. Each record must hash to the name it was fetched by.
-async function fetchLog(base, digest) {
+export async function fetchLog(base, digest) {
   const records = [];
   while (digest) {
     if (!/^[0-9a-f]{64}$/.test(digest) || records.length > 100000) throw new Error('replica log is malformed');
@@ -164,4 +164,32 @@ export async function cloneReplica(base, name, state, report = () => {}) {
   await putRepo(repo, refs);
   await replaceRefUpdates(name, logs);
   return repo;
+}
+
+// Fetch whatever these objects need that the store does not have. Each must match its label.
+export async function fetchMissing(base, ids, report = () => {}) {
+  let stored = 0;
+  const queue = [...ids];
+  const seen = new Set();
+  while (queue.length) {
+    const id = queue.pop();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    if (await hasObject(id)) continue;
+    const response = await fetch(objectUrl(base, id));
+    if (!response.ok) throw new Error(`replica is missing object ${id}`);
+    const envelope = new Uint8Array(await response.arrayBuffer());
+    if (!sameLabel(id, labelOf(envelope))) throw new Error(`refused: the replica served different bytes for ${id}`);
+    await putObjects([{ id, envelope }]);
+    stored += 1;
+    if (stored % 25 === 0) report(`fetched ${stored} objects`);
+    const { kind } = open(envelope);
+    if (kind === 'commit') {
+      const commit = parseCommit(envelope);
+      queue.push(commit.tree, ...commit.parents);
+    } else if (kind === 'tree') {
+      for (const entry of parseTree(envelope)) if (entry.mode !== '160000') queue.push(entry.id);
+    }
+  }
+  return stored;
 }

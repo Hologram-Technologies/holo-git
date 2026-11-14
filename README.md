@@ -5,7 +5,7 @@ A serverless code-hosting application that runs entirely in the browser, built a
 Live page: https://humuhumu33.github.io/holo-git/ . Press Clone and it clones this repository from a static replica published beside it.
 Gitea is the reference for features. LexLean specifies the rules and Lean proves them. Storage is content-addressed with kappa labels.
 
-Status: Phase 1 complete, with the gaps listed below. Phase 2 works in the browser: clone, browse, diff, blame, offline. Phase 3: commit in the browser, push to a writable replica, clone it back, grant and revoke access, export to git. The holo builds on GitHub Actions and replays 16 of 16 acceptance vectors. It rates P0: it does not yet carry provenance, proof or replay statements inside it.
+Status: Phase 1 complete, with the gaps listed below. Phase 2 works in the browser: clone, browse, diff, blame, offline. Phase 3: commit in the browser, push to a writable replica, clone it back, fetch and merge, grant and revoke access, export to git. The holo builds on GitHub Actions and replays 16 of 16 acceptance vectors. It rates P0: it does not yet carry provenance, proof or replay statements inside it.
 
 ## What is proved today
 
@@ -119,7 +119,6 @@ Limits:
 - Not tried against a real object store. The adapter needs conditional writes and an exposed `ETag` header; S3-compatible stores offer both, but I have only run it against the stand-in.
 - One request per object, in both directions. Fine for small repositories, slow for large ones; packs are not used for transfer yet.
 - One branch per repository can be pushed. A repository that has never been changed on this device has no signed log and cannot be pushed.
-- No fetch into an existing clone: to pick up someone else's push, clone again.
 
 ## Grants
 
@@ -149,15 +148,38 @@ Limits:
 - Only the owner can grant. Read and write only; no admin grants, no chains of grants, though the kernel decides chains of up to five links.
 - Read access is not enforced: nothing is encrypted, so anyone who can reach the replica can read it. A read grant is a statement, not a barrier.
 - A grant names a device key, not a person. There is no key-to-identity binding yet.
-- Two people pushing at once: the second is told to clone again. There is no fetch or merge.
+- Two people pushing at once: the second is told to fetch; see Fetch and merge.
 - The proofs cover the access rules. Assembling the request (reading the log, checking signatures, choosing which grant applies) is page code, tested by hand only.
+
+## Fetch and merge
+
+Two people can now work on one replica without cloning again. Fetch brings a clone up to the replica; if both sides changed, it merges.
+
+- The replica's log stands. This device's unpushed records are signed again on top of it: its commits become one merge commit, its grants and revocations are issued again. Nothing already published is rewritten.
+- Every re-signed record goes through the same fold and the same kernel decision as any other. A device whose access was withdrawn in the meantime cannot merge its work in.
+- Trees are merged by identifier: identical subtrees are never opened. A file both sides changed is merged line by line in the engine.
+- The merge rule is the cautious one. A line both sides kept is an anchor; between anchors, one side's change is taken, the same change on both sides is taken, and anything else is a conflict. Changes to adjacent lines conflict, as in git.
+- A conflict changes nothing here: the branch and the log stay as they were, and the conflicting paths are listed.
+
+What is tested:
+
+- The engine's merge against `git merge-file` on 400 random cases: whenever the engine calls a merge clean, git does too, with the same bytes. In these cases the two agreed every time (382 clean, 18 conflicts).
+- Eight page tests between two devices: fast-forward, different files, different parts of one file, the same line, the same file added identically and differently, an unpushed grant issued again, and a device revoked in the meantime. Each clean merge's tree is exactly the tree `git merge-tree` writes for the same two commits, and git's `fsck` accepts the replica afterwards.
+
+Limits:
+
+- A conflict cannot be resolved here yet. The way out is to clone again and redo the change.
+- A file deleted on one side and changed on the other is reported as a conflict, and so is a file whose kind changed. Renames are not followed.
+- With criss-cross history there can be several merge bases; the newest is used, where git would merge them first.
+- The merge commit is a plain commit with two parents. No rebase, no squash.
+- Fetch reads one request per object, like clone.
 
 ## Automated tests
 
 Every push runs two suites before anything is deployed. A failure stops the deploy.
 
-- `engine/tests`: eleven tests of the engine against git (objects, packs, deltas, diff, blame, written objects, packs and bundles).
-- `test/page.test.mjs`: fifteen tests of the page's own modules, run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
+- `engine/tests`: thirteen tests of the engine against git (objects, packs, deltas, diff, blame, merge, written objects, packs and bundles).
+- `test/page.test.mjs` and `test/merge.test.mjs`: twenty-three tests of the page's own modules, run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
 
 What the page tests cover: clone matches git object for object; history, changed paths and line counts match `git show --numstat`; blame matches `git blame`; altered stored bytes are refused; a commit made here is pulled and `fsck`ed by git; push sends only what is missing and git accepts what the replica holds; a tampered object, log record or head is refused; grant, use, escalation, revocation and expiry between two devices; a validly signed forgery written straight to the store; a broken chain and a record from another repository.
 

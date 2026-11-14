@@ -6,6 +6,7 @@ import { startShell } from './shell.js';
 import { loadKernel, decisions } from './kernel.js';
 import { checkLog, deviceKey, grant, revoke } from './identity.js';
 import { push } from './replica.js';
+import { fetchFrom } from './sync.js';
 import { clone, resolveCommit, readTree, lookup, history, changedPaths, person, fileVersions, commitFile, bundleOf } from './git.js';
 
 const main = document.getElementById('main');
@@ -297,9 +298,24 @@ async function branchTools(repo, refs, ref) {
         : ` Pushed ${result.objects} objects and ${result.records} signed update${result.records === 1 ? '' : 's'} in ${Math.round(performance.now() - started)} ms.`;
     } catch (error) { pushNote.textContent = ` ${error.message}`; }
   } }, 'Push');
+  const fetchButton = el('button', { onclick: async () => {
+    try {
+      pushNote.textContent = ' fetching…';
+      const result = await fetchFrom(repo, ref, address.value, { name: saved('holo-git-name'), email: saved('holo-git-email') }, (message) => { pushNote.textContent = ` ${message}`; });
+      await setRepo({ ...repo, replica: address.value.replace(/\/+$/, '') });
+      if (result.outcome === 'conflict') { pushNote.textContent = ` Both sides changed the same lines in: ${result.conflicts.join(', ')}. Nothing here was changed.`; return; }
+      sessionStorage.setItem('holo-git-note', { 'up to date': 'Already up to date.', ahead: `Nothing new on the replica; ${result.unpushed} record${result.unpushed === 1 ? '' : 's'} here not pushed yet.`,
+        'fast-forward': 'Fetched and moved to the replica\'s head.', merged: 'Fetched and merged with the changes made here. Push to publish the merge.',
+        rebased: 'Fetched; the changes made here were signed again on top. Push to publish them.' }[result.outcome]);
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    } catch (error) { pushNote.textContent = ` ${error.message}`; }
+  } }, 'Fetch');
+  let carried = '';
+  try { carried = sessionStorage.getItem('holo-git-note') || ''; sessionStorage.removeItem('holo-git-note'); } catch { /* storage unavailable */ }
+  if (carried) pushNote.textContent = ` ${carried}`;
   return el('div', { class: 'tools' },
     el('p', { class: log.valid ? '' : 'error' }, state, ' ', button, note),
-    el('p', { class: 'push' }, address, pushButton, pushNote),
+    el('p', { class: 'push' }, address, fetchButton, pushButton, pushNote),
     await accessTools(repo, log));
 }
 

@@ -5,6 +5,7 @@
 
 pub mod abi;
 pub mod diff;
+pub mod merge;
 pub mod object;
 pub mod pack;
 pub mod write;

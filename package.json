@@ -4,7 +4,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "test": "node --test test/page.test.mjs"
+    "test": "node --test test/page.test.mjs test/merge.test.mjs"
   },
   "devDependencies": {
     "fake-indexeddb": "6.0.0"

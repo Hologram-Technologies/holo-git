@@ -131,3 +131,16 @@ export async function appendRecord(local, record) {
   tx.objectStore('reflog').add({ local, record });
   await done(tx);
 }
+
+// Replace this clone's log and move its refs in one transaction.
+export async function adoptLog(local, records, heads) {
+  const tx = db.transaction(['refs', 'reflog'], 'readwrite');
+  const log = tx.objectStore('reflog');
+  const keys = await ask(log.getAllKeys());
+  const values = await ask(log.getAll());
+  values.forEach((entry, i) => { if ((entry.local || entry.repo) === local) log.delete(keys[i]); });
+  for (const record of records) log.add({ local, record });
+  const refs = (await ask(tx.objectStore('refs').get(local))) || {};
+  tx.objectStore('refs').put({ ...refs, ...heads }, local);
+  await done(tx);
+}

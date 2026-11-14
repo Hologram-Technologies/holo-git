@@ -119,3 +119,9 @@ export function makeCommit({ tree, parents, author, committer, message }) {
 
 // A git bundle: one ref and every object it needs. `git clone file.bundle` reads it.
 export const makeBundle = (ref, id, envelopes) => call('eng_bundle', pack([utf8.encode(ref), unhex(id), ...envelopes]));
+
+// Three-way merge of text. `clean` is false when both sides changed the same lines differently.
+export function mergeLines(base, ours, theirs) {
+  const out = call('eng_merge', pack([base, ours, theirs]));
+  return out[0] === 1 ? { clean: true, bytes: out.subarray(1) } : { clean: false };
+}
