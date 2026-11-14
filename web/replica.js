@@ -10,15 +10,42 @@
 import { labelOf, parseCommit, parseTree, open } from './engine.js';
 import { sameLabel } from './kernel.js';
 import { fold } from './log.js';
+import { signS3 } from './s3sign.js';
 import { recordDigest } from './records.js';
 import { getObject, putObjects, hasObject, putRepo, listRefUpdates, replaceRefUpdates } from './store.js';
 
 export const PROTOCOL = 'holo-git/replica/1';
+
+// Keys for stores that require signed requests, by replica address. They are held in memory
+// only, for as long as the page is open, and are never written to storage or sent anywhere:
+// each request carries a signature made with the secret, not the secret.
+const credentials = new Map();
+export function setCredentials(base, keys) {
+  base = base.replace(/\/+$/, '');
+  if (keys && keys.accessKey && keys.secretKey) credentials.set(base, { region: 'us-east-1', ...keys });
+  else credentials.delete(base);
+}
+export const hasCredentials = (base) => credentials.has(base.replace(/\/+$/, ''));
+
+export async function replicaFetch(url, init = {}) {
+  const base = [...credentials.keys()].find((known) => url.startsWith(`${known}/`));
+  let response;
+  if (!base) response = await fetch(url, init);
+  else {
+    const headers = await signS3({ method: init.method || 'GET', url, headers: init.headers || {}, body: init.body }, credentials.get(base));
+    response = await fetch(url, { ...init, headers });
+  }
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(base ? 'the store refused the request: the keys are wrong or lack permission' : 'the store refused the request: it needs keys');
+  }
+  return response;
+}
+
 const text = new TextDecoder();
 const objectUrl = (base, id) => `${base}/objects/sha1/${id.slice(0, 2)}/${id.slice(2)}`;
 
 export async function readState(base) {
-  const response = await fetch(`${base}/state.json`, { cache: 'no-store' });
+  const response = await replicaFetch(`${base}/state.json`, { cache: 'no-store' });
   if (response.status === 404) return { state: null, etag: null };
   if (!response.ok) throw new Error(`replica: ${response.status}`);
   const state = await response.json();
@@ -31,7 +58,7 @@ export async function fetchLog(base, digest) {
   const records = [];
   while (digest) {
     if (!/^[0-9a-f]{64}$/.test(digest) || records.length > 100000) throw new Error('replica log is malformed');
-    const response = await fetch(`${base}/log/${digest}.json`, { cache: 'no-store' });
+    const response = await replicaFetch(`${base}/log/${digest}.json`, { cache: 'no-store' });
     if (!response.ok) throw new Error(`replica is missing log record ${digest.slice(0, 12)}`);
     const record = await response.json();
     if (await recordDigest(record) !== digest) throw new Error('refused: a log record does not match its digest');
@@ -61,7 +88,7 @@ async function closure(startIds, stop = new Set()) {
 }
 
 async function put(url, body, headers) {
-  const response = await fetch(url, { method: 'PUT', body, headers });
+  const response = await replicaFetch(url, { method: 'PUT', body, headers });
   return response.status;
 }
 
@@ -141,7 +168,7 @@ export async function cloneReplica(base, name, state, report = () => {}) {
     if (seen.has(id)) continue;
     seen.add(id);
     if (await hasObject(id)) continue;
-    const response = await fetch(objectUrl(base, id));
+    const response = await replicaFetch(objectUrl(base, id));
     if (!response.ok) throw new Error(`replica is missing object ${id}`);
     const envelope = new Uint8Array(await response.arrayBuffer());
     if (!sameLabel(id, labelOf(envelope))) throw new Error(`refused: the replica served different bytes for ${id}`);
@@ -176,7 +203,7 @@ export async function fetchMissing(base, ids, report = () => {}) {
     if (seen.has(id)) continue;
     seen.add(id);
     if (await hasObject(id)) continue;
-    const response = await fetch(objectUrl(base, id));
+    const response = await replicaFetch(objectUrl(base, id));
     if (!response.ok) throw new Error(`replica is missing object ${id}`);
     const envelope = new Uint8Array(await response.arrayBuffer());
     if (!sameLabel(id, labelOf(envelope))) throw new Error(`refused: the replica served different bytes for ${id}`);

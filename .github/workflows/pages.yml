@@ -45,7 +45,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Test the page's own code against git and a stand-in store
+      - name: Start a real S3-compatible store with throwaway keys
+        run: |
+          {
+            echo "S3_TEST_ACCESS_KEY=test$(openssl rand -hex 8)"
+            echo "S3_TEST_SECRET_KEY=$(openssl rand -hex 24)"
+            echo "S3_TEST_ENDPOINT=http://127.0.0.1:8333"
+          } >>"$GITHUB_ENV"
+      - name: Wait for the store
+        run: sh scripts/dev-s3.sh start
+      - name: Test the page's own code against git, a stand-in store and the real one
         run: |
           npm ci --no-audit --no-fund
           npm test

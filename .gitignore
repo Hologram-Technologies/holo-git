@@ -9,3 +9,4 @@ web/engine.wasm
 web/fixtures/
 web/sw.js
 .replica/
+.s3-config.tmp.json

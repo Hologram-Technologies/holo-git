@@ -5,7 +5,7 @@ import { openStore, getObject, getRepo, getRefs, listRepos, countObjects, stats,
 import { startShell } from './shell.js';
 import { loadKernel, decisions } from './kernel.js';
 import { checkLog, deviceKey, grant, revoke } from './identity.js';
-import { push } from './replica.js';
+import { push, setCredentials, hasCredentials } from './replica.js';
 import { fetchFrom } from './sync.js';
 import { clone, resolveCommit, readTree, lookup, history, changedPaths, person, fileVersions, commitFile, bundleOf } from './git.js';
 
@@ -355,9 +355,22 @@ async function branchTools(repo, refs, ref) {
   let carried = '';
   try { carried = sessionStorage.getItem('holo-git-note') || ''; sessionStorage.removeItem('holo-git-note'); } catch { /* storage unavailable */ }
   if (carried) pushNote.textContent = ` ${carried}`;
+  const accessKey = el('input', { type: 'text', 'aria-label': 'Access key', placeholder: 'Access key', autocomplete: 'off' });
+  const secretKey = el('input', { type: 'password', 'aria-label': 'Secret key', placeholder: 'Secret key', autocomplete: 'off' });
+  const region = el('input', { type: 'text', 'aria-label': 'Region', placeholder: 'Region', value: 'us-east-1' });
+  const keysNote = el('span', { class: 'muted' }, hasCredentials(address.value || 'x') ? ' Keys are set for this address.' : '');
+  const keys = el('details', { class: 'access' }, el('summary', {}, 'Storage keys'),
+    el('p', { class: 'muted' }, 'Only needed for a store that requires signed requests. Kept in memory while this page is open; never stored, never sent. Each request carries a signature, not the secret.'),
+    el('form', { class: 'push', onsubmit: (event) => {
+      event.preventDefault();
+      setCredentials(address.value, { accessKey: accessKey.value.trim(), secretKey: secretKey.value, region: region.value.trim() || 'us-east-1' });
+      secretKey.value = '';
+      keysNote.textContent = hasCredentials(address.value) ? ' Keys are set for this address.' : ' Keys cleared.';
+    } }, accessKey, secretKey, region, el('button', {}, 'Use these keys'), keysNote));
   return el('div', { class: 'tools' },
     el('p', { class: log.valid ? '' : 'error' }, state, ' ', button, note),
     el('p', { class: 'push' }, address, fetchButton, pushButton, pushNote),
+    keys,
     await accessTools(repo, log));
 }
 

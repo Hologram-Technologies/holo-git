@@ -68,3 +68,4 @@ textarea { width: 100%; padding: 10px; border: 1px solid var(--line); border-rad
 .access select, .access input[type=number] { flex: 0 0 auto; padding: 4px 8px; font-size: 13px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; }
 .access input[type=number] { width: 150px; }
 .access button { padding: 4px 10px; font-size: 13px; }
+.access input[type=password], .access input[type=text]:not([readonly]) { flex: 1 1 140px; padding: 4px 8px; font-size: 13px; }

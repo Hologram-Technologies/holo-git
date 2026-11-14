@@ -115,10 +115,27 @@ Checked by hand in the browser against the stand-in, across origins:
 Limits:
 
 - A replica that serves an older, validly signed state is accepted by a fresh clone. This was tested and it happened. Detecting it needs a second replica or a head learned some other way.
-- No authentication to the replica. Anyone who can reach an open store can fill it with junk or overwrite `state.json`; readers will refuse what does not verify, so the damage is to availability. Real object stores need their own credentials, which this adapter does not handle yet.
-- Not tried against a real object store. The adapter needs conditional writes and an exposed `ETag` header; S3-compatible stores offer both, but I have only run it against the stand-in.
+- The stand-in store has no authentication. Against a real store the adapter signs its requests with keys; see Against a real object store.
+- Tried against one real S3-compatible store, not against a cloud provider; see Against a real object store.
 - One request per object, in both directions. Fine for small repositories, slow for large ones; packs are not used for transfer yet.
 - One branch per repository can be pushed. A repository that has never been changed on this device has no signed log and cannot be pushed.
+
+### Against a real object store
+
+The adapter now signs its requests (AWS Signature Version 4, with the browser's own cryptography) and has been run against a real S3-compatible store that checks every signature: SeaweedFS, from its official image, pinned by digest.
+
+- `web/s3sign.js` signs; `scripts/dev-s3.sh` starts the store with throwaway keys; `scripts/probe-s3.mjs` asks a store the questions the adapter depends on and prints the answers.
+- Keys are typed into the Storage keys panel. They are held in memory while the page is open, never written to storage, and never sent: each request carries a signature made with the secret.
+- What the probe found on SeaweedFS: a missing object is a 404; `If-None-Match: *` on an existing object and `If-Match` with a stale ETag both answer 412; the right ETag is accepted; a wrong secret and an unsigned request are refused with 403; cross-origin preflights are answered and the ETag is exposed to the page.
+
+Tested, in `test/s3.test.mjs`, on every push in CI: refusal without keys and with wrong keys; push, clone back on another device, and git's `fsck` on the result; two writers racing for the head, where the store lets exactly one through and the loser's retry succeeds; and grant, fetch and merge between two devices through the store. In a browser, by hand, from a different origin: refused without keys, two pushes with keys, a fetch, and the secret absent from browser storage afterwards.
+
+What this does not show:
+
+- AWS S3 and Cloudflare R2 themselves. SeaweedFS speaks the same protocol and checks signatures, but each provider has its own rules for cross-origin access, conditional writes and bucket addressing. Run `scripts/probe-s3.mjs` against a provider before relying on it.
+- Only path-style addresses (`https://host/bucket/prefix`) were used.
+- Reads need keys too unless the bucket is public. There is no way yet to give someone read access without giving them keys to the store.
+- Whoever holds the store's keys can delete or overwrite anything in it. The signed log means they cannot forge history, only destroy availability.
 
 ## Grants
 
@@ -190,7 +207,7 @@ Tested: the engine's marked output is byte for byte what `git merge-file` prints
 Every push runs two suites before anything is deployed. A failure stops the deploy.
 
 - `engine/tests`: fourteen tests of the engine against git (objects, packs, deltas, diff, blame, merge, written objects, packs and bundles).
-- `test/page.test.mjs` and `test/merge.test.mjs`: twenty-six tests of the page's own modules, run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
+- `test/page.test.mjs`, `test/merge.test.mjs` and `test/s3.test.mjs`: thirty tests of the page's own modules (four of them against a real S3-compatible store), run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
 
 What the page tests cover: clone matches git object for object; history, changed paths and line counts match `git show --numstat`; blame matches `git blame`; altered stored bytes are refused; a commit made here is pulled and `fsck`ed by git; push sends only what is missing and git accepts what the replica holds; a tampered object, log record or head is refused; grant, use, escalation, revocation and expiry between two devices; a validly signed forgery written straight to the store; a broken chain and a record from another repository.
 
