@@ -49,6 +49,10 @@ What works, tested in a browser:
 - Line diffs on each commit, with context, computed by a minimal Myers diff in the engine.
 - Blame for any file, following the first-parent line. Commits that left the file's label unchanged are skipped without reading it.
 
+- The page is pinned. A service worker holds the SHA-256 of each of the page's eight files and serves only bytes that match. The footer shows one digest naming the whole page; each deploy prints the same digest in its run summary.
+- A new version never takes over silently: the page shows its digest and waits for the visitor to accept it.
+- Offline: once loaded, the page and every cloned repository work with no network.
+
 What is tested: eight engine tests run against git itself.
 
 - Every object in a real packfile matches `git cat-file`, byte for byte, and damaged packs are refused.
@@ -57,7 +61,7 @@ What is tested: eight engine tests run against git itself.
 
 The page was exercised by hand against a replica of this repository: the object count matches git, the added and removed line counts match `git show --numstat` for 27 files in three commits, and the README's blame matches `git blame`.
 
-Not done yet: rename detection (a rename shows as a removal and an addition), blame through merges, markdown rendering, a service worker, partial clone, and large repositories (a pack is held in memory whole). Diffs with more than 2,000 differing lines fall back to a full replacement. The page does not yet call the proved kernel; label checks run in the engine. Storage is IndexedDB, not the file store the architecture proposes. The page has no automated tests.
+Not done yet: rename detection (a rename shows as a removal and an addition), blame through merges, markdown rendering, partial clone, and large repositories (a pack is held in memory whole). Diffs with more than 2,000 differing lines fall back to a full replacement. The page does not yet call the proved kernel; label checks run in the engine. Storage is IndexedDB, not the file store the architecture proposes. The page has no automated tests. The pin does not protect the first visit, and a visitor who accepts a new version without comparing digests is trusting the host again.
 
 ```bash
 (cd engine && cargo test --release)

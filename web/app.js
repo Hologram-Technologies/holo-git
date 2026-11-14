@@ -2,6 +2,7 @@
 
 import { loadEngine, open, diffLines, blameLines, splitLines } from './engine.js';
 import { openStore, getObject, getRepo, getRefs, listRepos, countObjects, stats, corruptObject } from './store.js';
+import { startShell } from './shell.js';
 import { clone, resolveCommit, readTree, lookup, history, changedPaths, person, fileVersions } from './git.js';
 
 const main = document.getElementById('main');
@@ -250,4 +251,5 @@ await loadEngine();
 await openStore();
 window.holoGit = { corruptObject, stats };
 window.addEventListener('hashchange', route);
+startShell(document.getElementById('shell'));
 await route();

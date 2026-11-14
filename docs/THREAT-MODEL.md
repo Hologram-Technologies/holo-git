@@ -24,7 +24,7 @@ We assume the user's browser and device are honest, and that the hash functions 
 | Protected branch moved by force | every reader ignores an invalid ref update | terminal git users see the raw ref on a peer unless the peer also enforces |
 | Stolen session key | non-extractable, scoped, short-lived; revocation operation | valid until expiry or revocation is seen |
 | Lost passkey | several passkeys per person; recovery set chosen in advance | no recovery if none was set up |
-| Malicious page delivery: the static host serves altered code | service worker pins the shell by digest; holo carries proof and provenance; reproducible build | the first visit trusts the host; a published digest and a second channel reduce this |
+| Malicious page delivery: the static host serves altered code | service worker pins the shell by digest; holo carries proof and provenance; reproducible build | built: files pinned by SHA-256, updates wait for the visitor, digest printed in each deploy's run summary. Remaining: the first visit trusts the host, and the run summary is on the same provider as the host, so it is not yet an independent second channel |
 | Script injection through markdown or repository content | rendered in an opaque-origin sandbox; strict content policy | sandbox escape bugs in browsers |
 | Executor returns a false result | trust policy: named anchors, or matching results from several independent executors | collusion among the executors a policy trusts |
 | Reused result for different inputs | action key derived by the kernel from all declared inputs | an undeclared input makes a step wrongly reusable; the sandbox must deny undeclared access |

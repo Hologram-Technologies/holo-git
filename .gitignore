@@ -7,3 +7,4 @@ node_modules/
 engine/target/
 web/engine.wasm
 web/fixtures/
+web/sw.js

@@ -30,7 +30,17 @@ jobs:
         working-directory: engine
         run: cargo test --release
       - name: Build the engine and the replica
-        run: sh scripts/build-web.sh
+        run: |
+          sh scripts/build-web.sh | tee build.log
+          {
+            echo '## Page digest'
+            echo
+            echo 'The live page shows this value in its footer. If the two differ, do not accept the page.'
+            echo
+            echo '```'
+            grep '^shell:' build.log
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
       - name: Upload the page
         uses: actions/upload-pages-artifact@v3
         with:
