@@ -85,3 +85,39 @@ Every example's verified digest differed in every run, including the eleven whos
 
 - The Atlas shards were not run. They need more memory and disk than this machine can give safely, and the premise they would have tested failed on the cheaper data.
 - Whether pass or fail, as opposed to the output bytes, is determined by the product alone was not tested. Every run in the sample passed.
+
+## Third question: where does the full gate's time go, and could per-test keys spare it?
+
+The roadmap's last speed item was keying tests one by one, with the instruction to measure a real suite first. This is that measurement. Nothing was run; the figures are CI's own.
+
+### What was used
+
+One complete successful run of LexLean's gate (run 43515398695): 72 jobs, 21.2 machine-hours. Each job ends by printing its own summary: seconds per recipe, how many verifications of which project it performed, and seconds per verifier stage. Those summaries were read from every job that prints one: 57 jobs, 13.5 machine-hours. The other 15 jobs, 7.7 machine-hours, are the plan job and the Mac, Windows, ARM and Intel jobs, which print no such summary.
+
+### Result
+
+- **Most of the summarised time is the verifier, not the tests around it.** 269 verifications took 7.8 hours, 58 percent of those jobs' time.
+- **Within a verification, three stages are 93 percent:** checking certificates 49 percent, elaboration 27 percent, replay 17 percent.
+- **The same projects are verified many times in one run.** 133 projects were verified; only 5 of them once.
+
+| Project | Verifications in the run | Seconds | Jobs |
+|---|---|---|---|
+| production | 33 | 7,485 | 4 |
+| uor-atlas (14 shards of one verification) | 14 | 7,229 | 14 |
+| models | 23 | 2,578 | 3 |
+| bootstrap | 1 | 2,170 | 1 |
+| compiler | 41 | 1,782 | 7 |
+| nat-add-zero | 75 | 298 | 3 |
+
+One scenario-test job shows the shape: 14 tests, 59 minutes, of which the job's own summary attributes more than the whole to verifying `production` ten times.
+
+### What follows
+
+- **Per-test keys from outside would not help here.** Every scenario test links the compiler and calls the verifier, so any compiler change changes every test's key, and the earlier section showed a verified result is not a function of the product alone. There is no input set to cut along.
+- **The repeated work is verifications of the same project in one run, on one commit, with one compiler.** That is inside one run, so the rule against carrying results between runs does not obviously forbid sharing it. LexLean's test support already shares a verification within one process; the jobs of a run are separate processes on separate machines and each starts again.
+- **An upper bound, not a result:** if every repeat of a same-named project in the run were identical work, sharing it would spare 4.3 hours, 55 percent of verification time and 20 percent of the whole run. Many repeats are surely deliberate variations of a project, so the real figure is lower. CI's logs do not identify each verification's inputs, so this cannot be narrowed from outside.
+- **This is LexLean's to decide and to build.** It would be a store of verification results keyed by everything a verification depends on, shared by the jobs of a run. holo-git's shared result store is that kind of thing, but the key and the call site are inside LexLean's verifier.
+
+### Decision for the roadmap
+
+Do not build per-test keys on this evidence. For a gate like this one, the remaining speed is inside the project's own tools.

@@ -71,6 +71,8 @@ Using it requires a checkout of holo-git beside LexLean and a definitions file; 
 - **Runs wait before they start.** The first leg of a run began a median 21 minutes after the run was created, and up to 70. The cause was not confirmed.
 - **Example verification repeats Lean's work.** Across six successful runs, eleven examples had identical generated Lean throughout, yet each was verified again in full every time, and its verified output differed every time, presumably because it carries the compiler's identity. The repeated part is Lean elaborating unchanged modules. Sparing it would mean a cache inside the verifier, keyed by module content and Lean version. The examples took about 68 minutes a run in that sample. This too would carry something between runs.
 
+- **One run verifies the same projects many times.** In run 43515398695, the 57 jobs that print a summary performed 269 verifications of 133 projects, 7.8 of their 13.5 machine-hours: `production` 33 times across 4 jobs, `compiler` 41 times across 7, `models` 23 times across 3. The test support shares a verification within one process; each job is a separate process and starts again. If any of those repeats are identical, a store of verification results shared by the jobs of one run would spare them without carrying anything between runs. How many are identical cannot be told from the logs.
+
 ## What is asked
 
 A decision on step 1 (the recipe) and step 2 (the optional hook). Both are small, both are reversible, and neither touches the gate.
