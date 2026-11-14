@@ -348,3 +348,17 @@ test('a stored result is not reused once a tool prints something else', () => {
   assert.equal(repo.runs(), 2, 'a different tool: run again');
   assert.match(out.stdout, /built: pass in/);
 });
+
+test('the keys listing keeps the shape the GitHub action reads', () => {
+  // .github/actions/checks takes the second column as the name and the line ending as the state.
+  const repo = checkout('listing', [
+    { name: 'first', run: exits('true'), inputs: ['lib'] },
+    { name: 'second-one', run: exits('false'), inputs: ['lib'] },
+  ], { 'lib/a.txt': 'a\n' });
+  const line = /^[0-9a-f]{64} {2}([a-z0-9-]+) {2}(no result|pass|fail)$/;
+  let rows = repo.run(['keys']).stdout.trim().split('\n').map((row) => row.match(line));
+  assert.deepEqual(rows.map((row) => row && [row[1], row[2]]), [['first', 'no result'], ['second-one', 'no result']]);
+  repo.run(['run']);
+  rows = repo.run(['keys']).stdout.trim().split('\n').map((row) => row.match(line));
+  assert.deepEqual(rows.map((row) => row && [row[1], row[2]]), [['first', 'pass'], ['second-one', 'fail']]);
+});
