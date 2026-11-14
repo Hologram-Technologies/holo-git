@@ -144,3 +144,35 @@ export async function adoptLog(local, records, heads) {
   tx.objectStore('refs').put({ ...refs, ...heads }, local);
   await done(tx);
 }
+
+// A repository's name in this browser is only its key here: what was signed keeps the name it was signed
+// under. Renaming moves the repository, its refs and its log to the new key in one step.
+export async function renameRepo(from, to) {
+  const tx = db.transaction(['repos', 'refs', 'reflog'], 'readwrite');
+  const repos = tx.objectStore('repos');
+  const refs = tx.objectStore('refs');
+  const log = tx.objectStore('reflog');
+  const repo = await ask(repos.get(from));
+  if (!repo || await ask(repos.get(to))) { tx.abort(); throw new Error(repo ? `a repository named ${to} already exists` : `no repository named ${from}`); }
+  repos.delete(from);
+  repos.put({ ...repo, name: to }, to);
+  refs.put(await ask(refs.get(from)), to);
+  refs.delete(from);
+  const keys = await ask(log.getAllKeys());
+  const values = await ask(log.getAll());
+  values.forEach((entry, i) => { if ((entry.local || entry.repo) === from) log.put({ local: to, record: entry.record || entry }, keys[i]); });
+  await done(tx);
+}
+
+// Remove a repository from this browser: its entry, its refs and its log. Its objects stay, because
+// other repositories here may share them; copies anyone else holds are not touched.
+export async function deleteRepo(name) {
+  const tx = db.transaction(['repos', 'refs', 'reflog'], 'readwrite');
+  tx.objectStore('repos').delete(name);
+  tx.objectStore('refs').delete(name);
+  const log = tx.objectStore('reflog');
+  const keys = await ask(log.getAllKeys());
+  const values = await ask(log.getAll());
+  values.forEach((entry, i) => { if ((entry.local || entry.repo) === name) log.delete(keys[i]); });
+  await done(tx);
+}

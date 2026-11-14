@@ -1,6 +1,4 @@
-// The screens that exist in the rebuilt interface so far: landing, home, first run, new and open
-// repository, settings, and the not-found and error screens. Repository screens are still the older
-// ones (web/app.js) and are replaced phase by phase.
+// The landing page, first run, new and open repository, user settings, and the not-found and error screens.
 
 import { S } from './strings.js';
 import { el, icon, button, field, textInput, validate, flash, blankslate, box, boxRow, sideNav, label, relativeTime } from './components.js';
@@ -132,7 +130,7 @@ export async function openRepository({ query }) {
 export async function settings({ params }) {
   if (!(await signedIn())) { navigate('/welcome', { replace: true }); return {}; }
   const tab = params.tab || 'profile';
-  const nav = sideNav([['profile', S.settings.profile, 'person'], ['appearance', S.settings.appearance, 'sun'], ['security', S.settings.security, 'shield-check']]
+  const nav = sideNav([['profile', S.settings.profile, 'person'], ['appearance', S.settings.appearance, 'sun'], ['security', S.settings.security, 'shield-check'], ['repositories', S.settings.repositories, 'repo'], ['storage', S.settings.storage, 'package']]
     .map(([key, text, name]) => ({ label: text, icon: name, href: href(`/settings/${key}`), current: key === tab })), { label: S.settings.nav });
   let body;
   if (tab === 'profile') {
@@ -163,6 +161,18 @@ export async function settings({ params }) {
     body = el('div', { class: 'stack' }, el('h2', { class: 'page-title' }, S.settings.keyTitle), el('p', { class: 'muted' }, S.settings.keyLead),
       id ? el('div', { class: 'keyline', 'data-key': true }, id) : flash('warning', S.settings.noKey),
       id ? el('div', {}, button({ label: S.common.copy, icon: 'copy', onclick: async (event) => { const target = event.currentTarget; await navigator.clipboard.writeText(id); target.lastChild.textContent = S.common.copied; } })) : '');
+  } else if (tab === 'repositories') {
+    const repos = await listRepos();
+    body = el('div', { class: 'stack' }, el('h2', { class: 'page-title' }, S.settings.repositories), box({ rows: repos.length ? repos.map((repo) => boxRow({ lead: icon('repo', { class: 'fg-muted' }), title: `${ownerOf(repo)} / ${repo.name}`, href: repoHref(repo), meta: repo.description, aside: button({ label: S.settings.title, size: 'small', href: repoHref(repo, 'settings') }) })) : blankslate({ icon: 'repo', title: S.settings.noRepos, action: button({ label: S.home.emptyAction, kind: 'primary', href: href('/new') }) }) }));
+  } else if (tab === 'storage') {
+    const note = el('div', {});
+    const usage = el('p', { class: 'muted' }, S.common.loading);
+    const amount = (bytes) => (bytes < 1048576 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : bytes < 1073741824 ? `${(bytes / 1048576).toFixed(1)} MB` : `${(bytes / 1073741824).toFixed(1)} GB`);
+    const manager = navigator.storage;
+    if (manager && manager.estimate) manager.estimate().then(({ usage: used = 0, quota = 0 }) => { usage.textContent = S.settings.used(amount(used), amount(quota)); }); else usage.textContent = S.settings.usageUnknown;
+    const kept = manager && manager.persisted ? await manager.persisted() : false;
+    body = el('div', { class: 'stack' }, el('h2', { class: 'page-title' }, S.settings.storage), el('p', {}, S.settings.storageLead), usage, note,
+      kept ? flash('success', S.settings.persisted) : el('div', { class: 'stack condensed' }, el('p', { class: 'muted small' }, S.settings.persistHint), el('div', {}, button({ label: S.settings.persist, attrs: { 'data-persist': '' }, onclick: async () => { const ok = manager && manager.persist ? await manager.persist() : false; note.replaceChildren(flash(ok ? 'success' : 'warning', ok ? S.settings.persisted : S.settings.persistDenied)); } }))));
   } else return notFoundPage();
   show('', el('div', { class: 'page-head' }, el('h1', { class: 'page-title' }, S.settings.title)), el('div', { class: 'settings' }, nav, body));
   return { title: `${S.settings[tab]} · ${S.settings.title}` };

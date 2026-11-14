@@ -154,3 +154,25 @@ test('an issue written before a fetch keeps its identity and its comments when i
   assert.equal(after.number, before.number + 1, 'the number moved past the issue that was published first');
   assert.deepEqual([after.title, after.body, after.comments, after.events[0].body, after.time], ['Written offline', 'Before fetching.', 1, 'Still offline.', before.time]);
 });
+
+test('a repository can be renamed and removed in this browser; its signed history still verifies under the new name', async () => {
+  await on(alice);
+  const before = await state();
+  await store.renameRepo(REPO, 'renamed');
+  assert.equal(await store.getRepo(REPO), undefined);
+  assert.equal((await store.getRepo('renamed')).name, 'renamed');
+  const log = await identity.checkLog('renamed');
+  assert.equal(log.valid, true, log.reason);
+  assert.deepEqual([log.entries, log.state.issues.length], [before.count, before.issues.length]);
+  await identity.addComment('renamed', log.state.issues[0].id, { body: 'Still here.', name: 'Alice' });
+  assert.equal((await identity.checkLog('renamed')).valid, true, 'new changes sign onto the same history');
+  // Failures: a name that is taken, and one that is not there.
+  await gitjs.createRepo({ name: 'taken', who: { name: 'Alice', email: 'alice@example.org' } });
+  await assert.rejects(store.renameRepo('renamed', 'taken'), /already exists/);
+  await assert.rejects(store.renameRepo('nowhere', 'somewhere'), /no repository named/);
+  await store.deleteRepo('taken');
+  assert.equal(await store.getRepo('taken'), undefined);
+  assert.equal((await store.listRefUpdates('taken')).length, 0);
+  await store.renameRepo('renamed', REPO);
+  assert.equal((await identity.checkLog(REPO)).valid, true);
+});

@@ -558,7 +558,7 @@ One test records a known limit instead of a guarantee: a replica rolled back to 
 
 The tests were checked for teeth: with the label check disabled eight of them fail, and with the kernel's decision ignored five fail.
 
-Not covered: the interface itself (`app.js`), the service worker and the update prompt, and real browsers. Those are still checked by hand. The tests run under Node, whose storage and cryptography are not the browser's.
+The interface is covered separately: `test/ui.test.mjs` and the files beside it drive every screen in a real browser engine (see `docs/UI-PHASE-1.md` to `docs/UI-PHASE-6.md`). Not covered: browsers other than Chromium.
 
 ```bash
 (cd engine && cargo test --release)

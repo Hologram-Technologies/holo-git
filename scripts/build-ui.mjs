@@ -1,7 +1,7 @@
 // Writes web/ui/tokens.css and web/ui/icons.js from the pinned design packages.
 //
-// Colours, sizes and type are never typed by hand: web/ui/ui.css and web/style.css name tokens,
-// and this script copies exactly the tokens they name (and the ones those depend on) out of
+// Colours, sizes and type are never typed by hand: web/ui/ui.css names tokens,
+// and this script copies exactly the tokens it names (and the ones those depend on) out of
 // @primer/primitives. Icons are the listed Octicons, as path data.
 //
 //   node scripts/build-ui.mjs           write the two files
@@ -56,7 +56,7 @@ function closure(used, ...maps) {
 }
 
 export function build() {
-  const sheets = ['web/ui/ui.css', 'web/style.css'].map((path) => readFileSync(join(root, path), 'utf8')).join('\n');
+  const sheets = ['web/ui/ui.css'].map((path) => readFileSync(join(root, path), 'utf8')).join('\n');
   const used = new Set([...sheets.matchAll(/var\((--[A-Za-z0-9-]+)/g)].map((m) => m[1]));
   const shared = new Map();
   for (const file of SHARED) for (const [name, value] of declarations(file)) if (!shared.has(name)) shared.set(name, value);

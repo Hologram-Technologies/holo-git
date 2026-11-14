@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, newDevice, root, use, wasm } from './helpers.mjs';
 import { S, PRODUCT } from '../web/ui/strings.js';
@@ -61,14 +61,8 @@ test('the rebuilt interface keeps its wording in the strings file: no banned wor
   assert.deepEqual(problems, []);
 });
 
-test('the screens not yet rebuilt do not gain banned words: the count only goes down', () => {
-  // docs/UI-STRINGS.md lists these. Each phase that rebuilds a screen lowers this number; it reaches zero when web/app.js is gone.
-  const BASELINE = Number(readFileSync(join(root, 'test', 'words-baseline.txt'), 'utf8').trim());
-  const source = readFileSync(join(root, 'web', 'app.js'), 'utf8').replace(/^\s*\/\/.*$/gm, '');
-  const literals = [...source.matchAll(/'((?:[^'\\\n]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g)].map((m) => m[1] ?? m[2]).filter((literal) => /\s/.test(literal.trim()));
-  const count = literals.filter((literal) => banned(withoutName(literal)).length).length;
-  if (process.env.WORDS_COUNT) console.log('count', count);
-  assert.ok(count <= BASELINE, `web/app.js has ${count} strings with a banned word; the baseline is ${BASELINE}`);
+test('the old screens are gone: every screen keeps its wording in the strings file', () => {
+  for (const file of ['web/app.js', 'web/style.css']) assert.equal(existsSync(join(root, file)), false, `${file} was the last of the old interface`);
 });
 
 test('tokens.css and icons.js are exactly what the pinned packages produce', () => {
@@ -76,7 +70,7 @@ test('tokens.css and icons.js are exactly what the pinned packages produce', () 
 });
 
 test('no colour is typed by hand in any stylesheet', () => {
-  for (const file of ['web/ui/ui.css', 'web/style.css']) {
+  for (const file of ['web/ui/ui.css']) {
     const css = readFileSync(join(root, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
     assert.deepEqual(css.match(/#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/g) || [], [], file);
   }

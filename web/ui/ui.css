@@ -417,3 +417,12 @@ dialog.palette { margin-top: var(--base-size-64); }
 .palette-list li { display: flex; align-items: center; gap: var(--base-size-8); padding: var(--base-size-6) var(--base-size-8); border-radius: var(--borderRadius-medium); cursor: pointer; }
 .palette-list li[aria-selected="true"] { background: var(--control-transparent-bgColor-selected); box-shadow: inset var(--borderWidth-thick) 0 var(--bgColor-accent-emphasis); }
 .palette-list li svg { color: var(--fgColor-muted); }
+
+/* Settings */
+.danger-title { margin-top: var(--base-size-16); color: var(--fgColor-danger); }
+.danger-zone { border-color: var(--borderColor-danger-emphasis); }
+.danger-zone .box-row { align-items: center; }
+.danger-zone .box-row:hover { background: none; }
+.danger-row { align-items: flex-end; margin-top: var(--base-size-8); }
+.collaborator { align-items: center; }
+.input.mono { font-family: var(--fontStack-monospace); font-size: var(--text-body-size-small); }

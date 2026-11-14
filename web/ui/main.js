@@ -4,14 +4,15 @@ import { loadEngine } from '../engine.js';
 import { loadKernel } from '../kernel.js';
 import { openStore } from '../store.js';
 import { startShell } from '../shell.js';
-import * as old from '../app.js';
+import * as repoSettings from './reposettings.js';
+import { listRefUpdates } from '../store.js';
 import { load, splitRef } from './repo.js';
 import * as code from './code.js';
 import * as past from './history.js';
 import * as issues from './issues.js';
 import * as pulls from './pulls.js';
 import * as house from './home.js';
-import { el, counter } from './components.js';
+import { counter, unsynced } from './components.js';
 import { PRODUCT } from './strings.js';
 import { route, notFound, onError, afterEach, start } from './router.js';
 import { drawFrame, drawUpdateNotice, setRepoContext, setScreenKeys, startChrome } from './chrome.js';
@@ -63,8 +64,8 @@ async function repository({ params }) {
     case 'milestone': return issues.milestone(context, more[0]);
     case 'pulls': return pulls.list(context);
     case 'pull': return ({ commits: pulls.commits, checks: pulls.checksTab, files: pulls.files }[more[1]] || pulls.conversation)(context, more[0]);
-    case 'resolve': return old.resolve(context, decodeURIComponent(rest));
-    case 'settings': return old.settings(context);
+    case 'resolve': return repoSettings.resolve(context);
+    case 'settings': return more[0] === 'collaborators' ? repoSettings.collaborators(context) : more[0] === 'branches' ? repoSettings.branchRules(context, more.slice(1)) : more[0] === 'remote' ? repoSettings.remote(context) : more[0] ? notFoundPage() : repoSettings.general(context);
     default: return notFoundPage();
   }
 }
@@ -82,7 +83,8 @@ afterEach(async ({ path, result }) => {
   // The Issues tab shows how many are open. It is filled in after the screen, because reading the log takes a moment.
   const tab = result.repo && document.querySelector('#main nav.tabs a[data-key="issues"]');
   if (tab) issues.openIssueCount(result.repo.name).then((n) => { if (n && tab.isConnected && !tab.querySelector('.counter')) tab.append(counter(n)); });
-  void el;
+  // Changes made here and not yet sent to the remote are marked, quietly, beside the repository's name.
+  if (result.repo && result.repo.published !== undefined) listRefUpdates(result.repo.name).then((log) => { const title = document.querySelector('#main .repo-head .title'); if (title && log.length > result.repo.published && !title.querySelector('.unsynced')) title.append(unsynced()); });
   await frame(path);
   // After a navigation, a keyboard or screen-reader user starts at the new screen, not at the old link.
   if (!first && !document.activeElement.closest('#main')) document.getElementById('main').focus({ preventScroll: true });

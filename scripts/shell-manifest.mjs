@@ -8,8 +8,8 @@ import { fileURLToPath } from 'node:url';
 
 const web = join(dirname(fileURLToPath(import.meta.url)), '..', 'web');
 const TYPES = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', wasm: 'application/wasm' };
-const PATHS = ['ancestry.js', 'app.js', 'checks.js', 'engine.js', 'engine.wasm', 'evidence.js', 'git.js', 'identity.js', 'index.html', 'kernel.js', 'kernel.wasm', 'log.js', 'records.js', 'replica.js', 's3sign.js', 'shell.js', 'store.js', 'sync.js', 'style.css',
-  'ui/chrome.js', 'ui/code.js', 'ui/components.js', 'ui/gallery.js', 'ui/history.js', 'ui/home.js', 'ui/icons.js', 'ui/issues.js', 'ui/main.js', 'ui/markdown.js', 'ui/pages.js', 'ui/pulls.js', 'ui/repo.js', 'ui/router.js', 'ui/session.js', 'ui/strings.js', 'ui/theme-init.js', 'ui/tokens.css', 'ui/ui.css', 'ui/zip.js'];
+const PATHS = ['ancestry.js', 'checks.js', 'engine.js', 'engine.wasm', 'evidence.js', 'git.js', 'identity.js', 'index.html', 'kernel.js', 'kernel.wasm', 'log.js', 'records.js', 'replica.js', 's3sign.js', 'shell.js', 'store.js', 'sync.js',
+  'ui/chrome.js', 'ui/code.js', 'ui/components.js', 'ui/gallery.js', 'ui/history.js', 'ui/home.js', 'ui/icons.js', 'ui/issues.js', 'ui/main.js', 'ui/markdown.js', 'ui/pages.js', 'ui/pulls.js', 'ui/reposettings.js', 'ui/repo.js', 'ui/router.js', 'ui/session.js', 'ui/strings.js', 'ui/theme-init.js', 'ui/tokens.css', 'ui/ui.css', 'ui/zip.js'];
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const files = PATHS.map((path) => {
