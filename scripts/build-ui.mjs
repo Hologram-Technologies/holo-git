@@ -1,0 +1,105 @@
+// Writes web/ui/tokens.css and web/ui/icons.js from the pinned design packages.
+//
+// Colours, sizes and type are never typed by hand: web/ui/ui.css and web/style.css name tokens,
+// and this script copies exactly the tokens they name (and the ones those depend on) out of
+// @primer/primitives. Icons are the listed Octicons, as path data.
+//
+//   node scripts/build-ui.mjs           write the two files
+//   node scripts/build-ui.mjs --check   exit 1 if the files on disk are not what would be written
+
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const pkg = (name) => join(root, 'node_modules', ...name.split('/'));
+const version = (name) => JSON.parse(readFileSync(join(pkg(name), 'package.json'), 'utf8')).version;
+const css = join(pkg('@primer/primitives'), 'dist', 'css');
+
+// Themes the page offers, by the value of <html data-theme>, and the package file each comes from.
+export const THEMES = {
+  light: 'light', dark: 'dark', dark_dimmed: 'dark-dimmed', light_high_contrast: 'light-high-contrast', dark_high_contrast: 'dark-high-contrast',
+};
+const SHARED = ['base/size/size.css', 'base/typography/typography.css', 'base/motion/motion.css', 'functional/size/border.css', 'functional/size/radius.css',
+  'functional/size/size.css', 'functional/size/breakpoints.css', 'functional/spacing/space.css', 'functional/typography/typography.css', 'functional/size/z-index.css', 'base/size/z-index.css'];
+
+export const ICONS = ['alert', 'arrow-right', 'bell', 'bold', 'book', 'check', 'check-circle', 'chevron-down', 'chevron-left', 'chevron-right', 'clock', 'cloud-offline', 'code',
+  'command-palette', 'comment', 'copy', 'cross-reference', 'device-desktop', 'diff-added', 'diff-modified', 'diff-removed', 'diff-renamed', 'dot-fill', 'download', 'eye', 'file',
+  'file-directory-fill', 'file-submodule', 'file-symlink-file', 'fold', 'gear', 'git-branch', 'git-commit', 'git-merge', 'git-pull-request', 'git-pull-request-closed',
+  'git-pull-request-draft', 'globe', 'graph', 'heading', 'history', 'home', 'inbox', 'info', 'issue-closed', 'issue-opened', 'issue-reopened', 'italic', 'kebab-horizontal', 'key',
+  'law', 'link', 'list-ordered', 'list-unordered', 'lock', 'markdown', 'mention', 'milestone', 'moon', 'organization', 'package', 'paperclip', 'pencil', 'people', 'person', 'pin',
+  'play', 'plus', 'question', 'quote', 'repo', 'repo-forked', 'search', 'shield-check', 'sign-out', 'skip', 'star', 'stop', 'sun', 'sync', 'table', 'tag', 'tasklist', 'three-bars',
+  'trash', 'triangle-down', 'unfold', 'upload', 'verified', 'x', 'x-circle-fill'];
+
+// The first rule block of a file, as name -> value. Theme files repeat their block inside a media query; the first is enough.
+function declarations(file) {
+  const text = readFileSync(join(css, file), 'utf8');
+  const open = text.indexOf('{');
+  const close = text.indexOf('}', open);
+  const map = new Map();
+  for (const m of text.slice(open + 1, close).matchAll(/(--[A-Za-z0-9-]+)\s*:\s*([^;]+);/g)) map.set(m[1], m[2].trim());
+  return map;
+}
+
+// Every token named in the stylesheets, then everything those tokens refer to.
+function closure(used, ...maps) {
+  const out = new Set();
+  const visit = (name) => {
+    if (out.has(name)) return;
+    const value = maps.map((m) => m.get(name)).find((v) => v !== undefined);
+    if (value === undefined) return;
+    out.add(name);
+    for (const m of value.matchAll(/var\((--[A-Za-z0-9-]+)/g)) visit(m[1]);
+  };
+  for (const name of used) visit(name);
+  return out;
+}
+
+export function build() {
+  const sheets = ['web/ui/ui.css', 'web/style.css'].map((path) => readFileSync(join(root, path), 'utf8')).join('\n');
+  const used = new Set([...sheets.matchAll(/var\((--[A-Za-z0-9-]+)/g)].map((m) => m[1]));
+  const shared = new Map();
+  for (const file of SHARED) for (const [name, value] of declarations(file)) if (!shared.has(name)) shared.set(name, value);
+  const themes = Object.fromEntries(Object.entries(THEMES).map(([key, file]) => [key, declarations(`functional/themes/${file}.css`)]));
+
+  // No web font is downloaded: the package's stack minus its first, downloaded, family.
+  for (const name of ['--fontStack-system', '--fontStack-sansSerif', '--fontStack-sansSerifDisplay']) shared.set(name, shared.get(name).replace(/^"Mona Sans VF",\s*/, ''));
+
+  const unknown = [...used].filter((name) => !shared.has(name) && !themes.light.has(name) && !name.startsWith('--ui-'));
+  if (unknown.length) throw new Error(`stylesheets name tokens the package does not have: ${unknown.join(', ')}`);
+
+  const block = (selector, map, names) => `${selector} {\n${[...names].filter((n) => map.has(n)).sort().map((n) => `  ${n}: ${map.get(n)};`).join('\n')}\n}\n`;
+  const sharedNames = closure(used, shared, themes.light);
+  let tokens = `/* Generated by scripts/build-ui.mjs from @primer/primitives ${version('@primer/primitives')} (MIT). Do not edit. */\n`;
+  tokens += block(':root', shared, sharedNames);
+  for (const [key, map] of Object.entries(themes)) {
+    tokens += block(`[data-theme="${key}"]`, map, closure(used, map, shared));
+  }
+
+  const data = JSON.parse(readFileSync(join(pkg('@primer/octicons'), 'build', 'data.json'), 'utf8'));
+  const icons = {};
+  for (const name of ICONS) {
+    const size = data[name] && data[name].heights['16'];
+    if (!size) throw new Error(`no 16 px Octicon named ${name}`);
+    icons[name] = [...size.path.matchAll(/<path([^>]*)>/g)].map((m) => {
+      const attrs = Object.fromEntries([...m[1].matchAll(/([a-z-]+)="([^"]*)"/g)].map((a) => [a[1], a[2]]));
+      return Object.keys(attrs).length === 1 ? attrs.d : attrs;
+    });
+  }
+  const iconFile = `// Generated by scripts/build-ui.mjs from @primer/octicons ${version('@primer/octicons')} (MIT). Do not edit.\n// name -> the paths of the 16 px icon.\nexport const ICONS = ${JSON.stringify(icons, null, 1)};\n`;
+  return { 'web/ui/tokens.css': tokens, 'web/ui/icons.js': iconFile };
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const files = build();
+  const check = process.argv.includes('--check');
+  let stale = 0;
+  for (const [path, content] of Object.entries(files)) {
+    const file = join(root, path);
+    if (check) { if (!existsSync(file) || readFileSync(file, 'utf8') !== content) { console.error(`${path} is out of date; run node scripts/build-ui.mjs`); stale += 1; } } else {
+      writeFileSync(file, content);
+      console.log(`${path}: ${content.length} bytes`);
+    }
+  }
+  if (stale) process.exit(1);
+}

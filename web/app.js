@@ -1,9 +1,14 @@
-// The page. Repository content is only ever placed with textContent, never parsed as HTML.
+// The repository screens that have not been rebuilt yet: files, commits, blame, the editor and pull requests.
+// They draw inside the new frame (web/ui/) and are replaced phase by phase. Their wording is the old one;
+// docs/UI-STRINGS.md maps each string to what replaces it.
+// Repository content is only ever placed with textContent, never parsed as HTML.
 
-import { loadEngine, open, diffLines, blameLines, splitLines } from './engine.js';
-import { openStore, getObject, getRepo, getRefs, listRepos, countObjects, stats, corruptObject, setRepo } from './store.js';
-import { startShell } from './shell.js';
-import { loadKernel, decisions } from './kernel.js';
+import { open, diffLines, blameLines, splitLines } from './engine.js';
+import { getObject, getRepo, getRefs, stats, corruptObject, setRepo } from './store.js';
+import { decisions } from './kernel.js';
+import { S } from './ui/strings.js';
+import * as ui from './ui/components.js';
+import { href } from './ui/router.js';
 import { checkLog, deviceKey, grant, revoke, protect, unprotect, approve } from './identity.js';
 import { isAncestor } from './ancestry.js';
 import { expectedActions } from './evidence.js';
@@ -12,7 +17,6 @@ import { fetchFrom, updatePull } from './sync.js';
 import { clone, resolveCommit, readTree, lookup, history, changedPaths, person, fileVersions, commitFile, bundleOf, proposeFile, mergePull } from './git.js';
 
 const main = document.getElementById('main');
-const status = document.getElementById('status');
 const text = new TextDecoder('utf-8', { fatal: false });
 
 function el(tag, attrs = {}, ...children) {
@@ -32,26 +36,19 @@ const short = (id) => id.slice(0, 7);
 const when = (ms) => new Date(ms).toISOString().slice(0, 10);
 const subject = (message) => message.split('\n')[0];
 
-async function showStatus() {
-  const total = await countObjects();
-  status.textContent = `${total} objects stored · ${stats.read} read this session, each re-verified · ${decisions.asked} decisions by the proved kernel` +
-    (stats.refused ? ` · ${stats.refused} REFUSED` : '');
-  status.className = stats.refused ? 'status refused' : 'status';
-}
-
 function header(repo, refs, ref, tab) {
   const branches = Object.keys(refs).filter((r) => r.startsWith('refs/heads/')).map((r) => r.slice(11));
   const tags = Object.keys(refs).filter((r) => r.startsWith('refs/tags/')).map((r) => r.slice(10));
   const select = el('select', { 'aria-label': 'Branch or tag', onchange: (e) => { location.hash = `#/${repo.name}/tree/${enc(e.target.value)}`; } },
     [...branches, ...tags].map((name) => { const o = el('option', { value: name }, name); o.selected = name === ref; return o; }));
   if (![...branches, ...tags].includes(ref)) select.prepend(Object.assign(el('option', { value: ref }, short(ref)), { selected: true }));
-  return el('div', {},
-    el('h1', {}, link('#/', 'holo-git'), ' / ', link(`#/${repo.name}/tree/${enc(ref)}`, repo.name)),
-    el('nav', { class: 'tabs' },
-      el('a', { href: `#/${repo.name}/tree/${enc(ref)}`, class: tab === 'code' ? 'on' : '' }, 'Code'),
-      el('a', { href: `#/${repo.name}/commits/${enc(ref)}`, class: tab === 'commits' ? 'on' : '' }, 'Commits'),
-      el('a', { href: `#/${repo.name}/pulls/${enc(ref)}`, class: tab === 'pulls' ? 'on' : '' }, 'Pull requests'),
-      select));
+  select.className = 'select';
+  const at = (view) => href(`/${repo.name}/${view}/${enc(ref)}`);
+  return el('div', { class: 'stack condensed' },
+    el('div', { class: 'row' }, ui.icon('repo', { class: 'fg-muted' }), el('strong', {}, link(at('tree'), repo.name)), repo.url ? '' : ui.label(S.repo.local)),
+    ui.tabs([{ label: S.repo.code, icon: 'code', href: at('tree'), current: tab === 'code' }, { label: S.repo.commits, icon: 'git-commit', href: at('commits'), current: tab === 'commits' },
+      { label: S.repo.pulls, icon: 'git-pull-request', href: at('pulls'), current: tab === 'pulls' }], { label: S.repo.navigation, flush: true }),
+    el('div', { class: 'row' }, el('div', {}, select)));
 }
 
 function crumbs(repo, ref, path, kind) {
@@ -70,29 +67,6 @@ function blobView(content) {
   const lines = text.decode(content).replace(/\n$/, '').split('\n');
   return el('table', { class: 'code' }, lines.map((line, i) =>
     el('tr', {}, el('td', { class: 'n' }, i + 1), el('td', {}, el('pre', {}, line)))));
-}
-
-async function home() {
-  const input = el('input', { type: 'url', placeholder: 'https://example.org/project.git', 'aria-label': 'Replica address', value: new URL('fixtures/holo-git.git', location.href.split('#')[0]).href });
-  const note = el('p', { class: 'muted' });
-  const form = el('form', { onsubmit: async (event) => {
-    event.preventDefault();
-    try {
-      const started = performance.now();
-      const repo = await clone(input.value, (message) => { note.textContent = message; });
-      note.textContent = `Cloned ${repo.objects} objects, ${repo.bytes} bytes, in ${Math.round(performance.now() - started)} ms.`;
-      location.hash = `#/${repo.name}/tree/${enc(repo.head.replace('refs/heads/', ''))}`;
-    } catch (error) { note.textContent = `Clone failed: ${error.message}`; }
-  } }, input, el('button', {}, 'Clone'));
-  const repos = await listRepos();
-  main.replaceChildren(
-    el('h1', {}, 'holo-git'),
-    el('p', {}, 'Clone a repository from any static replica. Every object is checked against its address before it is stored, and again every time it is read.'),
-    form, note,
-    repos.length ? el('h2', {}, 'On this device') : '',
-    el('ul', {}, repos.map((repo) => el('li', {},
-      link(`#/${repo.name}/tree/${enc(repo.head.replace('refs/heads/', ''))}`, repo.name),
-      el('span', { class: 'muted' }, ` · ${repo.objects} objects · from ${repo.url}`)))));
 }
 
 async function tree(repo, refs, ref, path) {
@@ -491,36 +465,34 @@ async function commitPage(repo, refs, id) {
     ...sections);
 }
 
-async function route() {
-  const [name, view, ref, ...rest] = decodeURI(location.hash.replace(/^#\/?/, '')).split('/');
-  try {
-    if (!name) await home();
-    else {
-      const repo = await getRepo(name);
-      if (!repo) throw new Error(`No repository named ${name} on this device.`);
-      const refs = await getRefs(name);
-      const target = decodeURIComponent(ref || repo.head.replace('refs/heads/', ''));
-      const path = rest.join('/');
-      if (view === 'blob') await blob(repo, refs, target, path);
-      else if (view === 'commits') await commits(repo, refs, target);
-      else if (view === 'commit') await commitPage(repo, refs, target);
-      else if (view === 'blame') await blamePage(repo, refs, target, path);
-      else if (view === 'edit') await editPage(repo, refs, target, path);
-      else if (view === 'resolve') await resolvePage(repo, refs, target);
-      else if (view === 'pulls') await pullsPage(repo, refs, target);
-      else if (view === 'pull') await pullPage(repo, refs, target);
-      else await tree(repo, refs, target, path);
-    }
-  } catch (error) {
-    main.replaceChildren(el('h1', {}, link('#/', 'holo-git')), el('p', { class: 'error' }, error.message));
+// One address, one screen: /{name}/{view}/{ref}/{path}. Called by the router in web/ui/main.js.
+export async function renderLegacy({ params }) {
+  const [view, ref, ...rest] = (params.rest || '').split('/');
+  const repo = await getRepo(params.repo);
+  if (!repo) {
+    main.className = 'page';
+    main.replaceChildren(ui.blankslate({ icon: 'repo', title: S.repo.notHere, action: ui.button({ label: S.repo.openByAddress, kind: 'primary', href: href('/open') }) }));
+    return { title: S.notFound.title };
   }
-  await showStatus();
+  main.className = 'page legacy';
+  const refs = await getRefs(repo.name);
+  const target = decodeURIComponent(ref || repo.head.replace('refs/heads/', ''));
+  const path = rest.join('/');
+  try {
+    if (view === 'blob') await blob(repo, refs, target, path);
+    else if (view === 'commits') await commits(repo, refs, target);
+    else if (view === 'commit') await commitPage(repo, refs, target);
+    else if (view === 'blame') await blamePage(repo, refs, target, path);
+    else if (view === 'edit') await editPage(repo, refs, target, path);
+    else if (view === 'resolve') await resolvePage(repo, refs, target);
+    else if (view === 'pulls') await pullsPage(repo, refs, target);
+    else if (view === 'pull') await pullPage(repo, refs, target);
+    else await tree(repo, refs, target, path);
+  } catch (error) {
+    main.replaceChildren(ui.flash('error', error.message));
+  }
+  return { title: repo.name, repo: repo.name };
 }
 
-await loadEngine();
-await loadKernel();
-await openStore();
+// For the tests and for debugging by hand.
 window.holoGit = { corruptObject, stats, decisions, bundleOf, getRefs };
-window.addEventListener('hashchange', route);
-startShell(document.getElementById('shell'));
-await route();

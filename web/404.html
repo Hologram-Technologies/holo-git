@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>holo-git</title>
+<!-- A static host answers a deep link it has no file for with this page. It sends the visitor to the
+     page's root and carries the address along as ?p=, where web/ui/router.js puts it back.
+     Once the service worker is in place it answers deep links itself and this file is not used.
+     The root is the first path segment on a github.io project site and "/" anywhere else. -->
+<script>
+(function () {
+  var parts = location.pathname.split('/');
+  var root = /\.github\.io$/.test(location.hostname) && parts[1] ? '/' + parts[1] + '/' : '/';
+  var rest = location.pathname.slice(root.length - 1) || '/';
+  if (rest === '/404.html') rest = '/';
+  location.replace(root + '?p=' + encodeURIComponent(rest + location.search) + location.hash);
+}());
+</script>
+</head>
+<body></body>
+</html>

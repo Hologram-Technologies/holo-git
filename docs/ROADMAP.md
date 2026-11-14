@@ -64,6 +64,8 @@ So the time goes, in order, to: waiting an hour to be told what two minutes on t
 
 Limits of this measurement: the input sets were drawn from directory names and the recipe list, not from tracing what each recipe opens; pushes were compared head to head, ignoring movement of the base branch; five comparisons exceeded the 300-file limit and were counted as changing everything; and LexLean's own specification requires its gate to run from a clean checkout, so any reuse there is its maintainers' decision.
 
+**Benchmarked since, with real runs.** The first stage of that project's CI, on the 12 merge commits it most recently failed: the same verdict and reason every time, a median 129 seconds here against a median 65.9 minutes in CI, 29 times faster to a verdict. The check itself takes the same time in both places; the difference is waiting. An unchanged repeat takes half a second. This is the commonest failure, not the full gate, and it is not 100 times. See `docs/BENCHMARK.md`.
+
 ## Order of work
 
 What is left, reordered by the measurement above. The numbered list after it records what is done.

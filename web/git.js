@@ -5,7 +5,7 @@ import { readPack, readLoose, parseCommit, parseTree, open, makeObject, makeTree
 import { moveRef, openPull } from './identity.js';
 import { isAncestor } from './ancestry.js';
 import { cloneReplica, PROTOCOL, replicaFetch } from './replica.js';
-import { putObjects, hasObject, getObject, putRepo } from './store.js';
+import { putObjects, hasObject, getObject, putRepo, getRepo } from './store.js';
 
 const text = new TextDecoder();
 
@@ -289,4 +289,28 @@ export async function mergePull({ repo, refs, branch, head }) {
   if (await isAncestor(old, head) !== true) throw new Error('this pull request is behind the branch; bring it up to date first');
   await moveRef({ repo: repo.name, ref, old, next: head, parents: [old] });
   return { id: head };
+}
+
+// A new repository on this device: one first commit on main, holding a README or nothing.
+// Like a fresh clone, it has no signed log until its first change, which makes this device its owner.
+export async function createRepo({ name, description = '', readme = true, message = 'Initial commit', who }) {
+  if (!/^[A-Za-z0-9._-]+$/.test(name) || name === '.' || name === '..') throw new Error('a repository name is letters, digits, dots, hyphens and underscores');
+  if (await getRepo(name)) throw new Error(`a repository named ${name} already exists`);
+  if (!clean(who.name) || !clean(who.email)) throw new Error('a name and an email are needed to commit');
+  const made = [];
+  const entries = [];
+  if (readme) {
+    const blob = makeObject('blob', new TextEncoder().encode(`# ${name}\n${description.trim() ? `\n${description.trim()}\n` : ''}`));
+    made.push(blob);
+    entries.push({ mode: '100644', name: 'README.md', id: blob.id });
+  }
+  const tree = makeTree(entries);
+  made.push(tree);
+  const line = identityLine(who.name, who.email, Date.now());
+  const commit = makeCommit({ tree: tree.id, parents: [], author: line, committer: line, message: `${message.trim()}\n` });
+  made.push(commit);
+  await putObjects(made);
+  const repo = { name, url: '', head: 'refs/heads/main', objects: made.length, bytes: made.reduce((n, object) => n + object.envelope.length, 0), cloned: Date.now(), description: description.trim() };
+  await putRepo(repo, { 'refs/heads/main': commit.id });
+  return { ...repo, commit: commit.id };
 }

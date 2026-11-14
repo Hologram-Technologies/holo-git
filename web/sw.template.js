@@ -53,6 +53,16 @@ async function serve(url, file) {
   }
 }
 
+// The page for a deep link: the pinned index.html, verified as always, with a <base> naming the scope
+// so its relative addresses resolve from the root and not from the deep link.
+async function page() {
+  const index = `${scope}index.html`;
+  const response = await serve(index, pinned.get(index));
+  if (!response.ok) return response;
+  const html = (await response.text()).replace('<head>', `<head>\n<base href="${new URL(scope).pathname}">`);
+  return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+}
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
@@ -65,7 +75,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   const file = pinned.get(key);
-  if (file) event.respondWith(serve(key, file));
+  if (file) { event.respondWith(serve(key, file)); return; }
+  // Addresses are paths (/name/tree/main). A navigation to one is answered with the pinned page itself,
+  // told where its files are, so reload and deep links work offline. Stored repositories are not pages.
+  if (event.request.mode === 'navigate' && key.startsWith(scope) && !key.startsWith(`${scope}fixtures/`)) event.respondWith(page());
   // Everything else (replicas, other origins) goes to the network untouched:
   // repository bytes are verified by their own labels, not by this pin.
 });
