@@ -126,10 +126,10 @@ export function segmented(options, value, onchange) {
 }
 
 // A dropdown. items: { label, href | onclick, icon, danger } | { heading } | 'divider'. Closing on Escape and outside clicks is handled once, in chrome.js.
-export function menu({ label: text, icon: leading, iconOnly, kind = 'default', size = 'medium', align, items, trigger }) {
+export function menu({ label: text, icon: leading, iconOnly, kind = 'default', size = 'medium', align, items, trigger, attrs = {} }) {
   const summary = trigger || el('summary', { class: `btn${KINDS[kind]}${SIZES[size]}${iconOnly ? ' btn-menu-icon' : ''}`, 'aria-label': iconOnly ? text : undefined, title: iconOnly ? text : undefined, 'aria-haspopup': 'menu' },
     leading && icon(leading), iconOnly ? null : el('span', {}, text), icon('triangle-down'));
-  const details = el('details', { class: `menu${align === 'end' ? ' end' : ''}` }, summary);
+  const details = el('details', { class: `menu${align === 'end' ? ' end' : ''}`, ...attrs }, summary);
   details.append(el('ul', { class: 'menu-list', role: 'menu' }, items.map((item) => {
     if (item === 'divider') return el('li', { class: 'divider', role: 'separator' });
     if (item.heading) return el('li', { class: 'heading', role: 'presentation' }, item.heading);

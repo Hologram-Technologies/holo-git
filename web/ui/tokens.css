@@ -17,6 +17,7 @@
   --base-size-96: 6rem;
   --base-text-lineHeight-normal: 1.5;
   --base-text-lineHeight-relaxed: 1.625;
+  --base-text-lineHeight-snug: 1.375;
   --base-text-lineHeight-tight: 1.25;
   --base-text-size-lg: 1.25rem;
   --base-text-size-md: 1rem;
@@ -48,6 +49,7 @@
   --focus-outline-width: 0.125rem;
   --fontStack-monospace: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
   --fontStack-system: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans Backtick Fix", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --overlay-height-medium: 20rem;
   --overlay-offset: 0.25rem;
   --overlay-padding-condensed: 0.5rem;
   --overlay-padding-normal: 1rem;
@@ -62,6 +64,7 @@
   --text-body-size-medium: var(--base-text-size-sm);
   --text-body-size-small: var(--base-text-size-xs);
   --text-body-weight: var(--base-text-weight-normal);
+  --text-codeInline-size: 0.9285em;
   --text-title-lineHeight-medium: var(--base-text-lineHeight-relaxed);
   --text-title-size-large: var(--base-text-size-xl);
   --text-title-size-medium: var(--base-text-size-lg);
@@ -96,6 +99,7 @@
   --borderColor-danger-muted: #ff818266;
   --borderColor-default: #d1d9e0;
   --borderColor-disabled: #818b981a;
+  --borderColor-done-emphasis: #8250df;
   --borderColor-muted: #d1d9e0b3;
   --borderColor-success-emphasis: #1a7f37;
   --borderColor-success-muted: #4ac26b66;
@@ -217,6 +221,7 @@
   --borderColor-danger-muted: #f8514966;
   --borderColor-default: #3d444d;
   --borderColor-disabled: #656c761a;
+  --borderColor-done-emphasis: #8957e5;
   --borderColor-muted: #3d444db3;
   --borderColor-success-emphasis: #238636;
   --borderColor-success-muted: #2ea04366;
@@ -337,6 +342,7 @@
   --borderColor-danger-emphasis: #c93c37;
   --borderColor-danger-muted: #e5534b66;
   --borderColor-default: #3d444d;
+  --borderColor-done-emphasis: #8256d0;
   --borderColor-muted: #3d444db3;
   --borderColor-success-emphasis: #347d39;
   --borderColor-success-muted: #46954a66;
@@ -458,6 +464,7 @@
   --borderColor-danger-muted: #ee5a5d;
   --borderColor-default: #454c54;
   --borderColor-disabled: #59636e1f;
+  --borderColor-done-emphasis: #622cbc;
   --borderColor-emphasis: var(--borderColor-default);
   --borderColor-muted: var(--borderColor-default);
   --borderColor-success-emphasis: #055d20;
@@ -580,6 +587,7 @@
   --borderColor-danger-muted: #ff8080;
   --borderColor-default: #b7bdc8;
   --borderColor-disabled: #656c761a;
+  --borderColor-done-emphasis: #b87fff;
   --borderColor-emphasis: var(--borderColor-default);
   --borderColor-muted: var(--borderColor-default);
   --borderColor-success-emphasis: #09b43a;

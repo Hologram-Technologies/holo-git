@@ -8,6 +8,7 @@ import { href, navigate } from './router.js';
 import { profile, setProfile, hasKey, createKey, keyId, signedIn, THEMES, theme, setTheme } from './session.js';
 import { listRepos } from '../store.js';
 import { clone, createRepo } from '../git.js';
+import { repoHref, repoPath, ownerOf, slug } from './repo.js';
 
 const main = () => document.getElementById('main');
 function show(kind, ...children) {
@@ -18,8 +19,6 @@ function show(kind, ...children) {
 
 const EMAIL = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 const REPO = /^[A-Za-z0-9._-]+$/;
-const defaultBranch = (repo) => repo.head.replace('refs/heads/', '');
-export const repoHref = (repo) => href(`/${repo.name}/tree/${encodeURIComponent(defaultBranch(repo))}`);
 
 export async function home() {
   if (!(await signedIn())) {
@@ -34,7 +33,7 @@ export async function home() {
     const shown = repos.filter((repo) => repo.name.toLowerCase().includes(wanted));
     if (!repos.length) list.replaceChildren(box({ body: blankslate({ icon: 'repo', title: S.home.empty, action: button({ label: S.home.emptyAction, kind: 'primary', href: href('/new') }) }) }));
     else if (!shown.length) list.replaceChildren(box({ body: blankslate({ icon: 'search', title: S.home.noMatch }) }));
-    else list.replaceChildren(box({ rows: shown.map((repo) => boxRow({ lead: icon('repo', { class: 'fg-muted' }), title: repo.name, href: repoHref(repo),
+    else list.replaceChildren(box({ rows: shown.map((repo) => boxRow({ lead: icon('repo', { class: 'fg-muted' }), title: `${ownerOf(repo)} / ${repo.name}`, href: repoHref(repo),
       meta: [repo.description && el('div', {}, repo.description), el('span', {}, S.home.updated(''), relativeTime(repo.cloned || Date.now()))], aside: repo.url ? '' : label(S.home.local) })) }));
   };
   filter.addEventListener('input', draw);
@@ -93,8 +92,8 @@ export async function newRepository() {
     const taken = value && (await listRepos()).some((repo) => repo.name === value);
     if (!validate([[name, !value ? S.newRepo.nameBlank : !REPO.test(value) || value === '.' || value === '..' ? S.newRepo.nameInvalid : taken ? S.newRepo.nameTaken(value) : '']])) return;
     try {
-      const repo = await createRepo({ name: value, description: description.control.value, readme: readme.checked, message: S.newRepo.initial, who: profile() });
-      navigate(`/${repo.name}/tree/main`);
+      const repo = await createRepo({ name: value, description: description.control.value, readme: readme.checked, message: S.newRepo.initial, who: profile(), owner: slug(profile().name) });
+      navigate(repoPath(repo));
     } catch { note.replaceChildren(flash('error', S.failed.lead)); }
   } }, el('div', {}, el('h1', { class: 'page-title' }, S.newRepo.title), el('p', { class: 'muted' }, S.newRepo.lead)), note, name, description,
   el('div', { class: 'choice' }, readme, el('div', {}, el('label', { for: 'readme' }, el('strong', {}, S.newRepo.readme)), el('div', { class: 'muted small' }, S.newRepo.readmeHint))),
@@ -117,7 +116,7 @@ export async function openRepository({ query }) {
     note.replaceChildren();
     try {
       const repo = await clone(value);
-      navigate(`/${repo.name}/tree/${encodeURIComponent(defaultBranch(repo))}`);
+      navigate(repoPath(repo));
     } catch {
       submit.disabled = false;
       submit.removeAttribute('aria-busy');

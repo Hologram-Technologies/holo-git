@@ -5,6 +5,7 @@ import { S, PRODUCT } from './strings.js';
 import { el, icon, mark, button, menu, dialog, avatar, flash } from './components.js';
 import { href, navigate } from './router.js';
 import { shell, acceptUpdate } from '../shell.js';
+import { repoPath } from './repo.js';
 
 const header = () => document.getElementById('header');
 const footer = () => document.getElementById('footer');
@@ -50,6 +51,9 @@ export function drawFrame(state) {
     el('button', { type: 'button', class: 'btn-link', onclick: openShortcuts }, S.footer.shortcuts));
 }
 export const setRepoContext = (repo) => { current.repo = repo; };
+// Keys that belong to the screen on show: [{ keys: 't', label, run }]. Replaced on every navigation.
+let screenKeys = [];
+export const setScreenKeys = (keys) => { screenKeys = keys; };
 
 export function openAbout() {
   const value = shell.integrity;
@@ -66,7 +70,8 @@ export function openShortcuts() {
   const table = (title, rows) => [el('h3', { class: 'small muted' }, title), el('table', { class: 'keys' }, el('tbody', {}, rows.map(([text, keys]) => el('tr', {}, el('td', {}, text), el('td', {}, keys)))))];
   dialog({ title: S.shortcuts.title, body: el('div', { class: 'stack' },
     table(S.shortcuts.site, [[S.shortcuts.help, kbd('?')], [S.shortcuts.submit, [el('kbd', {}, 'Ctrl'), ' ', el('kbd', {}, 'Enter')]], [S.shortcuts.closeDialog, kbd('Esc')]]),
-    current.repo ? table(S.shortcuts.repository, [[S.shortcuts.goCode, kbd('g', 'c')], [S.shortcuts.goPulls, kbd('g', 'p')]]) : '') }).showModal();
+    current.repo ? table(S.shortcuts.repository, [[S.shortcuts.goCode, kbd('g', 'c')], [S.shortcuts.goPulls, kbd('g', 'p')]]) : '',
+    screenKeys.length ? table(S.code.shortcuts, screenKeys.map((key) => [key.label, kbd(key.keys)])) : '') }).showModal();
 }
 
 // Shown once, above the screen, when a newer version has been fetched and is waiting to be accepted.
@@ -110,11 +115,13 @@ export function startChrome() {
     if (event.ctrlKey || event.metaKey || event.altKey || typing(event.target) || document.querySelector('dialog[open]')) return;
     if (event.key === '?') { event.preventDefault(); openShortcuts(); return; }
     if (pending === 'g' && current.repo) {
-      const target = { c: `/${current.repo}`, p: `/${current.repo}/pulls` }[event.key];
+      const target = { c: repoPath(current.repo), p: repoPath(current.repo, 'pulls') }[event.key];
       pending = null;
       if (target) { event.preventDefault(); navigate(target); }
       return;
     }
-    if (event.key === 'g') { pending = 'g'; clearTimeout(timer); timer = setTimeout(() => { pending = null; }, 1500); }
+    if (event.key === 'g') { pending = 'g'; clearTimeout(timer); timer = setTimeout(() => { pending = null; }, 1500); return; }
+    const own = screenKeys.find((key) => key.keys === event.key);
+    if (own) { event.preventDefault(); own.run(); }
   });
 }

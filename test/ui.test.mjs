@@ -125,7 +125,7 @@ test('new repository: created with a first commit and listed on home; a bad or t
   await page.fill(name, 'hello-world');
   await page.fill(await page.field(S.newRepo.description), 'A first repository');
   await page.click('button', S.newRepo.create);
-  await page.arrive('/hello-world/tree/main');
+  await page.arrive('/ada-example/hello-world');
   assert.match(await page.text(), /README\.md/);
   assert.match(await page.text(), /A first repository/);
   assert.match(await page.text(), new RegExp(S.newRepo.initial));
@@ -163,7 +163,7 @@ test('open repository: a repository served as files is copied in; a bad or dead 
 
   await page.fill(address, `${remote.url}fixture.git`);
   await page.click('button', S.openRepo.open);
-  await page.arrive('/fixture/tree/main');
+  await page.arrive('/127-0-0-1/fixture');
   assert.match(await page.text(), /docs/);
   assert.match(await page.text(), /A repository for tests\./);
   noErrors(page);
@@ -309,15 +309,15 @@ test('a repository screen sits in the new frame: tabs, the go-to keys, and the p
   await page.goto(`${site.url}new`);
   await page.fill(await page.field(S.newRepo.name), 'demo');
   await page.click('button', S.newRepo.create);
-  await page.arrive('/demo/tree/main');
+  await page.arrive('/ada-example/demo');
   assert.equal(await page.eval("document.querySelector('#main nav.tabs a[aria-current=page]').textContent"), S.repo.code);
   await page.eval('document.activeElement.blur()');
   await page.press('g'); await page.press('p');
-  await page.arrive('/demo/pulls');
+  await page.arrive('/ada-example/demo/pulls');
   await page.press('g'); await page.press('c');
-  await page.arrive('/demo');
-  await page.click('#main nav.tabs a', S.repo.commits);
-  await page.arrive('/demo/commits/main');
+  await page.arrive('/ada-example/demo');
+  await page.click('[data-commits]');
+  await page.arrive('/ada-example/demo/commits/main');
   assert.match(await page.text(), new RegExp(S.newRepo.initial));
   // Failure: a repository this browser does not hold.
   await page.goto(`${site.url}nothing-here`);

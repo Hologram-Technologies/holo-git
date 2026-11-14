@@ -85,7 +85,7 @@ export function start() {
   history.scrollRestoration = 'manual';
   // A deep link opened before the service worker was in place arrives as ?p=/the/path (see web/404.html).
   const carried = new URLSearchParams(location.search).get('p');
-  if (carried && carried.startsWith('/')) history.replaceState({ y: 0 }, '', href(carried));
+  if (carried && carried.startsWith('/')) history.replaceState({ y: 0 }, '', href(carried) + location.hash);
   else if (legacy(location.hash)) history.replaceState({ y: 0 }, '', href(legacy(location.hash)));
 
   // A scroll position still waiting to be saved belongs to the screen being left; drop it.

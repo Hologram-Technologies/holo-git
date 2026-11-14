@@ -98,8 +98,9 @@ export async function launch() {
     const KEYS = { Enter: 13, Escape: 27, Tab: 9 };
     page.press = async (key, { ctrl = false, shift = false } = {}) => {
       const base = { key, code: KEYS[key] ? key : `Key${key.toUpperCase()}`, windowsVirtualKeyCode: KEYS[key] || key.toUpperCase().charCodeAt(0), modifiers: (ctrl ? 2 : 0) | (shift ? 8 : 0) };
-      const printable = key.length === 1 && !ctrl;
-      await cdp('Input.dispatchKeyEvent', { type: printable ? 'keyDown' : 'rawKeyDown', ...base, text: printable ? key : undefined });
+      // Enter carries a character too, as on a keyboard; without it a form is not submitted.
+      const text = ctrl ? undefined : key === 'Enter' ? String.fromCharCode(13) : key.length === 1 ? key : undefined;
+      await cdp('Input.dispatchKeyEvent', { type: text ? 'keyDown' : 'rawKeyDown', ...base, text });
       await cdp('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
     };
     page.field = (labelText) => page.waitFor(`(() => { const l = [...document.querySelectorAll('label')].find((n) => n.textContent.trim().startsWith(${JSON.stringify(labelText)})); return l ? '#' + l.getAttribute('for') : null; })()`, `a field labelled ${labelText}`);

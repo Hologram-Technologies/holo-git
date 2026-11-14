@@ -293,7 +293,7 @@ export async function mergePull({ repo, refs, branch, head }) {
 
 // A new repository on this device: one first commit on main, holding a README or nothing.
 // Like a fresh clone, it has no signed log until its first change, which makes this device its owner.
-export async function createRepo({ name, description = '', readme = true, message = 'Initial commit', who }) {
+export async function createRepo({ name, description = '', readme = true, message = 'Initial commit', who, owner }) {
   if (!/^[A-Za-z0-9._-]+$/.test(name) || name === '.' || name === '..') throw new Error('a repository name is letters, digits, dots, hyphens and underscores');
   if (await getRepo(name)) throw new Error(`a repository named ${name} already exists`);
   if (!clean(who.name) || !clean(who.email)) throw new Error('a name and an email are needed to commit');
@@ -310,7 +310,7 @@ export async function createRepo({ name, description = '', readme = true, messag
   const commit = makeCommit({ tree: tree.id, parents: [], author: line, committer: line, message: `${message.trim()}\n` });
   made.push(commit);
   await putObjects(made);
-  const repo = { name, url: '', head: 'refs/heads/main', objects: made.length, bytes: made.reduce((n, object) => n + object.envelope.length, 0), cloned: Date.now(), description: description.trim() };
+  const repo = { name, url: '', head: 'refs/heads/main', objects: made.length, bytes: made.reduce((n, object) => n + object.envelope.length, 0), cloned: Date.now(), description: description.trim(), ...(owner ? { owner } : {}) };
   await putRepo(repo, { 'refs/heads/main': commit.id });
   return { ...repo, commit: commit.id };
 }

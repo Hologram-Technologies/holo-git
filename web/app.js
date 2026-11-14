@@ -1,20 +1,20 @@
-// The repository screens that have not been rebuilt yet: files, commits, blame, the editor and pull requests.
-// They draw inside the new frame (web/ui/) and are replaced phase by phase. Their wording is the old one;
-// docs/UI-STRINGS.md maps each string to what replaces it.
+// The repository screens that have not been rebuilt yet: pull requests, conflict resolution, and the panels for
+// fetching, pushing, access and branch protection. They draw inside the new repository frame (web/ui/repo.js)
+// and are replaced in later phases. Their wording is the old one; docs/UI-STRINGS.md maps each string to what replaces it.
 // Repository content is only ever placed with textContent, never parsed as HTML.
 
-import { open, diffLines, blameLines, splitLines } from './engine.js';
-import { getObject, getRepo, getRefs, stats, corruptObject, setRepo } from './store.js';
+import { open, diffLines, splitLines } from './engine.js';
+import { getObject, getRefs, stats, corruptObject, setRepo } from './store.js';
 import { decisions } from './kernel.js';
 import { S } from './ui/strings.js';
 import * as ui from './ui/components.js';
-import { href } from './ui/router.js';
+import { repoHeader, ownerOf } from './ui/repo.js';
 import { checkLog, deviceKey, grant, revoke, protect, unprotect, approve } from './identity.js';
 import { isAncestor } from './ancestry.js';
 import { expectedActions } from './evidence.js';
 import { push, setCredentials, hasCredentials } from './replica.js';
 import { fetchFrom, updatePull } from './sync.js';
-import { clone, resolveCommit, readTree, lookup, history, changedPaths, person, fileVersions, commitFile, bundleOf, proposeFile, mergePull } from './git.js';
+import { resolveCommit, lookup, changedPaths, bundleOf, mergePull } from './git.js';
 
 const main = document.getElementById('main');
 const text = new TextDecoder('utf-8', { fatal: false });
@@ -36,87 +36,8 @@ const short = (id) => id.slice(0, 7);
 const when = (ms) => new Date(ms).toISOString().slice(0, 10);
 const subject = (message) => message.split('\n')[0];
 
-function header(repo, refs, ref, tab) {
-  const branches = Object.keys(refs).filter((r) => r.startsWith('refs/heads/')).map((r) => r.slice(11));
-  const tags = Object.keys(refs).filter((r) => r.startsWith('refs/tags/')).map((r) => r.slice(10));
-  const select = el('select', { 'aria-label': 'Branch or tag', onchange: (e) => { location.hash = `#/${repo.name}/tree/${enc(e.target.value)}`; } },
-    [...branches, ...tags].map((name) => { const o = el('option', { value: name }, name); o.selected = name === ref; return o; }));
-  if (![...branches, ...tags].includes(ref)) select.prepend(Object.assign(el('option', { value: ref }, short(ref)), { selected: true }));
-  select.className = 'select';
-  const at = (view) => href(`/${repo.name}/${view}/${enc(ref)}`);
-  return el('div', { class: 'stack condensed' },
-    el('div', { class: 'row' }, ui.icon('repo', { class: 'fg-muted' }), el('strong', {}, link(at('tree'), repo.name)), repo.url ? '' : ui.label(S.repo.local)),
-    ui.tabs([{ label: S.repo.code, icon: 'code', href: at('tree'), current: tab === 'code' }, { label: S.repo.commits, icon: 'git-commit', href: at('commits'), current: tab === 'commits' },
-      { label: S.repo.pulls, icon: 'git-pull-request', href: at('pulls'), current: tab === 'pulls' }], { label: S.repo.navigation, flush: true }),
-    el('div', { class: 'row' }, el('div', {}, select)));
-}
-
-function crumbs(repo, ref, path, kind) {
-  const parts = path.split('/').filter(Boolean);
-  const out = [link(`#/${repo.name}/tree/${enc(ref)}`, repo.name)];
-  parts.forEach((part, i) => {
-    const sub = parts.slice(0, i + 1).join('/');
-    const last = i === parts.length - 1;
-    out.push(' / ', last ? el('strong', {}, part) : link(`#/${repo.name}/${last ? kind : 'tree'}/${enc(ref)}/${sub}`, part));
-  });
-  return el('p', { class: 'crumbs' }, out);
-}
-
-function blobView(content) {
-  if (content.subarray(0, 8000).includes(0)) return el('p', { class: 'muted' }, `Binary file, ${content.length} bytes.`);
-  const lines = text.decode(content).replace(/\n$/, '').split('\n');
-  return el('table', { class: 'code' }, lines.map((line, i) =>
-    el('tr', {}, el('td', { class: 'n' }, i + 1), el('td', {}, el('pre', {}, line)))));
-}
-
-async function tree(repo, refs, ref, path) {
-  const { id, commit } = await resolveCommit(refs, ref);
-  const node = await lookup(commit.tree, path);
-  if (node.kind !== 'tree') return blob(repo, refs, ref, path);
-  const entries = (await readTree(node.id)).sort((a, b) => (b.mode === '40000') - (a.mode === '40000') || (a.name < b.name ? -1 : 1));
-  const prefix = path ? `${path}/` : '';
-  const rows = entries.map((entry) => {
-    const dir = entry.mode === '40000';
-    return el('tr', {},
-      el('td', {}, dir ? '▸ ' : '', link(`#/${repo.name}/${dir ? 'tree' : 'blob'}/${enc(ref)}/${prefix}${entry.name}`, entry.name)),
-      el('td', { class: 'muted mono' }, short(entry.id)));
-  });
-  const author = person(commit.author);
-  const parts = [header(repo, refs, ref, 'code'), crumbs(repo, ref, path, 'tree'),
-    el('p', { class: 'latest' }, el('strong', {}, author.name), ' ', link(`#/${repo.name}/commit/${id}`, subject(commit.message)),
-      el('span', { class: 'muted' }, ` · ${short(id)} · ${when(author.time)}`)),
-    el('table', { class: 'files' }, rows)];
-  const readme = entries.find((entry) => /^readme(\.md|\.txt)?$/i.test(entry.name));
-  if (readme) {
-    const { content } = open(await getObject(readme.id));
-    parts.push(el('h2', {}, readme.name), el('pre', { class: 'readme' }, text.decode(content)));
-  }
-  main.replaceChildren(...parts);
-}
-
-async function blob(repo, refs, ref, path) {
-  const { commit } = await resolveCommit(refs, ref);
-  const node = await lookup(commit.tree, path);
-  if (node.kind === 'tree') return tree(repo, refs, ref, path);
-  const { content } = open(await getObject(node.id));
-  main.replaceChildren(header(repo, refs, ref, 'code'), crumbs(repo, ref, path, 'blob'),
-    el('p', { class: 'muted mono' }, `sha1:${node.id} · ${content.length} bytes · `, link(`#/${repo.name}/blame/${enc(ref)}/${path}`, 'Blame'),
-      refs[`refs/heads/${ref}`] ? [' · ', link(`#/${repo.name}/edit/${enc(ref)}/${path}`, 'Edit')] : ''), blobView(content));
-}
-
-async function commits(repo, refs, ref) {
-  const { id } = await resolveCommit(refs, ref);
-  const list = await history(id, 100);
-  main.replaceChildren(header(repo, refs, ref, 'commits'), await branchTools(repo, refs, ref),
-    el('table', { class: 'files' }, list.map(({ id: commitId, commit }) => {
-      const author = person(commit.author);
-      return el('tr', {},
-        el('td', {}, link(`#/${repo.name}/commit/${commitId}`, subject(commit.message))),
-        el('td', { class: 'muted' }, author.name),
-        el('td', { class: 'muted' }, when(author.time)),
-        el('td', { class: 'mono' }, link(`#/${repo.name}/tree/${commitId}`, short(commitId))));
-    })));
-}
+// The frame draws the repository header now; the screens below still call this where it used to be.
+const header = () => '';
 
 const isBinary = (bytes) => bytes.subarray(0, 8000).includes(0);
 const shown = (line) => text.decode(line).replace(/\r?\n$/, '');
@@ -161,59 +82,7 @@ async function fileDiff(change, oldTree, newTree) {
     el('table', { class: 'code diff' }, out));
 }
 
-async function blamePage(repo, refs, ref, path) {
-  const { id } = await resolveCommit(refs, ref);
-  const { versions, walked, complete } = await fileVersions(id, path);
-  if (!versions.length) throw new Error(`${path}: no such file`);
-  const contents = [];
-  for (const version of versions) contents.push(open(await getObject(version.blob)).content);
-  if (isBinary(contents[0])) throw new Error(`${path} is a binary file.`);
-  const owners = blameLines(contents);
-  const lines = splitLines(contents[0]);
-  const rows = lines.map((line, at) => {
-    const version = versions[owners[at]];
-    const first = at === 0 || owners[at - 1] !== owners[at];
-    const author = person(version.commit.author);
-    return el('tr', { class: first ? 'first' : '' },
-      el('td', { class: 'who' }, first ? [link(`#/${repo.name}/commit/${version.id}`, short(version.id)), ` ${author.name} · ${when(author.time)}`] : ''),
-      el('td', { class: 'n' }, at + 1), el('td', {}, el('pre', {}, shown(line))));
-  });
-  main.replaceChildren(header(repo, refs, ref, 'code'), crumbs(repo, ref, path, 'blob'),
-    el('p', { class: 'muted' }, `${versions.length} version${versions.length === 1 ? '' : 's'} across ${walked} commits on the first-parent line`,
-      complete ? '' : ' (older history not examined)', ' · ', link(`#/${repo.name}/blob/${enc(ref)}/${path}`, 'Normal view')),
-    el('table', { class: 'code blame' }, rows));
-}
-
 const saved = (key) => { try { return localStorage.getItem(key) || ''; } catch { return ''; } };
-const remember = (key, value) => { try { localStorage.setItem(key, value); } catch { /* storage unavailable */ } };
-
-async function editPage(repo, refs, ref, path) {
-  if (!refs[`refs/heads/${ref}`]) throw new Error('Only a branch can be edited.');
-  const { commit } = await resolveCommit(refs, ref);
-  const node = await lookup(commit.tree, path);
-  if (node.kind !== 'blob') throw new Error(`${path} is a directory.`);
-  const { content } = open(await getObject(node.id));
-  if (isBinary(content)) throw new Error(`${path} is a binary file.`);
-  const area = el('textarea', { 'aria-label': 'File content', spellcheck: 'false', rows: '24' });
-  area.value = text.decode(content);
-  const message = el('input', { type: 'text', 'aria-label': 'Commit message', placeholder: `Update ${path.split('/').pop()}` });
-  const name = el('input', { type: 'text', 'aria-label': 'Your name', placeholder: 'Your name', value: saved('holo-git-name') });
-  const email = el('input', { type: 'email', 'aria-label': 'Your email', placeholder: 'you@example.org', value: saved('holo-git-email') });
-  const note = el('p', { class: 'muted' }, 'The commit is made on this device and signed with this device\'s key. Nothing is sent anywhere.');
-  const form = el('form', { class: 'edit', onsubmit: async (event) => {
-    event.preventDefault();
-    try {
-      remember('holo-git-name', name.value);
-      remember('holo-git-email', email.value);
-      const propose = event.submitter && event.submitter.value === 'propose';
-      const made = await (propose ? proposeFile : commitFile)({ repo, refs, branch: ref, path, content: new TextEncoder().encode(area.value),
-        message: message.value || message.getAttribute('placeholder'), name: name.value, email: email.value });
-      location.hash = propose ? `#/${repo.name}/pulls/${enc(ref)}` : `#/${repo.name}/commit/${made.id}`;
-    } catch (error) { note.textContent = error.message; note.className = 'error'; }
-  } }, area, message, name, email,
-  el('p', { class: 'push' }, el('button', { value: 'commit' }, `Commit to ${ref}`), el('button', { value: 'propose' }, 'Propose as a pull request')));
-  main.replaceChildren(header(repo, refs, ref, 'code'), crumbs(repo, ref, path, 'blob'), form, note);
-}
 
 let pendingMerge = null;
 
@@ -241,7 +110,7 @@ async function resolvePage(repo, refs, ref) {
       const outcome = await fetchFrom(repo, ref, address, { name: saved('holo-git-name'), email: saved('holo-git-email') }, () => {}, { against: result.against, paths });
       if (outcome.outcome === 'conflict') { pendingMerge = { ...pendingMerge, result: outcome }; note.textContent = 'There are still conflicts.'; window.dispatchEvent(new HashChangeEvent('hashchange')); return; }
       pendingMerge = null;
-      location.hash = `#/${repo.name}/commit/${outcome.head}`;
+      location.hash = `#/${ownerOf(repo)}/${repo.name}/commit/${outcome.head}`;
     } catch (error) { note.textContent = error.message; note.className = 'error'; }
   } },
   controls.map(({ detail, node }) => el('section', { class: 'file' },
@@ -260,7 +129,7 @@ async function pullsPage(repo, refs, ref) {
   if (!log.valid) throw new Error(`This repository's signed log does not verify: ${log.reason}`);
   const mine = (await deviceKey()).id;
   const rows = [...log.state.pulls].reverse().map((pull) => el('tr', {},
-    el('td', {}, link(`#/${repo.name}/pull/${pull.number}`, `#${pull.number} ${pull.title}`)),
+    el('td', {}, link(`#/${ownerOf(repo)}/${repo.name}/pull/${pull.number}`, `#${pull.number} ${pull.title}`)),
     el('td', { class: 'muted' }, keyName(pull.author, mine, log.state.owner)),
     el('td', { class: 'muted' }, pull.ref.slice(11)),
     el('td', {}, pull.merged ? 'merged' : `open · ${pull.counted} of ${pull.needed} approvals`)));
@@ -314,13 +183,13 @@ async function pullPage(repo, refs, number) {
   const approvers = [...pull.approvals].map((key) => keyName(key, mine, log.state.owner) + (key === pull.author ? ', does not count: the proposer' : ''));
   const actions = pull.merged ? [] : [
     pull.approvals.has(mine) ? '' : act('Approve this commit', () => approve(repo.name, branch, pull.head)),
-    upToDate ? act('Merge', async () => { const merged = await mergePull({ repo, refs, branch, head: pull.head }); location.hash = `#/${repo.name}/commit/${merged.id}`; })
-      : act(`Bring up to date with ${branch}`, async () => { await updatePull({ repo, refs, branch, head: pull.head, title: pull.title, who }); location.hash = `#/${repo.name}/pulls/${enc(branch)}`; }),
+    upToDate ? act('Merge', async () => { const merged = await mergePull({ repo, refs, branch, head: pull.head }); location.hash = `#/${ownerOf(repo)}/${repo.name}/commit/${merged.id}`; })
+      : act(`Bring up to date with ${branch}`, async () => { await updatePull({ repo, refs, branch, head: pull.head, title: pull.title, who }); location.hash = `#/${ownerOf(repo)}/${repo.name}/pulls`; }),
   ];
   main.replaceChildren(header(repo, refs, branch, 'pulls'),
     el('h2', {}, `#${pull.number} ${pull.title}`),
     el('p', {}, pull.merged ? 'Merged' : 'Open', el('span', { class: 'muted' }, ` · into ${branch} · proposed by ${keyName(pull.author, mine, log.state.owner)} on ${when(pull.time)}`)),
-    el('p', { class: 'mono muted' }, 'commit ', link(`#/${repo.name}/commit/${pull.head}`, short(pull.head)),
+    el('p', { class: 'mono muted' }, 'commit ', link(`#/${ownerOf(repo)}/${repo.name}/commit/${pull.head}`, short(pull.head)),
       upToDate ? '' : ` · behind ${branch}: it must be brought up to date before it can merge`),
     el('p', {}, `Approvals that count: ${pull.counted} of ${pull.needed} required.`,
       el('span', { class: 'muted' }, approvers.length ? ` Approved by ${approvers.join('; ')}.` : ' Nobody has approved this commit.')),
@@ -411,7 +280,7 @@ async function branchTools(repo, refs, ref) {
       await setRepo({ ...repo, replica: address.value.replace(/\/+$/, '') });
       if (result.outcome === 'conflict') {
         pendingMerge = { repo: repo.name, ref, address: address.value, result };
-        location.hash = `#/${repo.name}/resolve/${enc(ref)}`;
+        location.hash = `#/${ownerOf(repo)}/${repo.name}/resolve/${enc(ref)}`;
         return;
       }
       sessionStorage.setItem('holo-git-note', { 'up to date': 'Already up to date.', ahead: `Nothing new on the replica; ${result.unpushed} record${result.unpushed === 1 ? '' : 's'} here not pushed yet.`,
@@ -442,57 +311,19 @@ async function branchTools(repo, refs, ref) {
     await accessTools(repo, log, ref));
 }
 
-async function commitPage(repo, refs, id) {
-  const { commit } = await resolveCommit(refs, id);
-  const author = person(commit.author);
-  const parentTree = commit.parents.length ? (await resolveCommit(refs, commit.parents[0])).commit.tree : null;
-  const changes = await changedPaths(parentTree, commit.tree);
-  const ref = repo.head.replace('refs/heads/', '');
-  const sections = [];
-  for (const change of changes) {
-    sections.push(el('section', { class: 'file' },
-      el('h3', {}, el('span', { class: `st ${change.status}` }, change.status), ' ',
-        change.status === 'removed' ? change.path : link(`#/${repo.name}/blob/${id}/${change.path}`, change.path)),
-      await fileDiff(change, parentTree, commit.tree)));
-  }
-  main.replaceChildren(header(repo, refs, ref, 'commits'),
-    el('h2', {}, subject(commit.message)),
-    el('pre', { class: 'readme' }, commit.message.split('\n').slice(1).join('\n').trim()),
-    el('p', {}, el('strong', {}, author.name), el('span', { class: 'muted' }, ` committed on ${when(author.time)}`)),
-    el('p', { class: 'mono muted' }, `commit sha1:${id}`, el('br'), 'tree ', link(`#/${repo.name}/tree/${id}`, short(commit.tree)),
-      commit.parents.map((parent) => [' · parent ', link(`#/${repo.name}/commit/${parent}`, short(parent))])),
-    el('h2', {}, `${changes.length} changed file${changes.length === 1 ? '' : 's'}`),
-    ...sections);
+// Called by the router (web/ui/main.js) with the repository already found. Each draws an old screen under the new header.
+async function framed(context, tab, draw) {
+  main.className = 'page';
+  try { await draw(); } catch (error) { main.replaceChildren(ui.flash('error', error.message)); }
+  const body = el('div', { class: 'page legacy' }, ...main.childNodes);
+  main.className = 'page wide';
+  main.replaceChildren(repoHeader(context, tab), body);
+  return { title: `${tab === 'pulls' ? S.repo.pulls : S.repo.settings} \u00b7 ${context.repo.name}`, repo: context.repo };
 }
-
-// One address, one screen: /{name}/{view}/{ref}/{path}. Called by the router in web/ui/main.js.
-export async function renderLegacy({ params }) {
-  const [view, ref, ...rest] = (params.rest || '').split('/');
-  const repo = await getRepo(params.repo);
-  if (!repo) {
-    main.className = 'page';
-    main.replaceChildren(ui.blankslate({ icon: 'repo', title: S.repo.notHere, action: ui.button({ label: S.repo.openByAddress, kind: 'primary', href: href('/open') }) }));
-    return { title: S.notFound.title };
-  }
-  main.className = 'page legacy';
-  const refs = await getRefs(repo.name);
-  const target = decodeURIComponent(ref || repo.head.replace('refs/heads/', ''));
-  const path = rest.join('/');
-  try {
-    if (view === 'blob') await blob(repo, refs, target, path);
-    else if (view === 'commits') await commits(repo, refs, target);
-    else if (view === 'commit') await commitPage(repo, refs, target);
-    else if (view === 'blame') await blamePage(repo, refs, target, path);
-    else if (view === 'edit') await editPage(repo, refs, target, path);
-    else if (view === 'resolve') await resolvePage(repo, refs, target);
-    else if (view === 'pulls') await pullsPage(repo, refs, target);
-    else if (view === 'pull') await pullPage(repo, refs, target);
-    else await tree(repo, refs, target, path);
-  } catch (error) {
-    main.replaceChildren(ui.flash('error', error.message));
-  }
-  return { title: repo.name, repo: repo.name };
-}
+export const pulls = (context) => framed(context, 'pulls', () => pullsPage(context.repo, context.refs, context.head));
+export const pull = (context, number) => framed(context, 'pulls', () => pullPage(context.repo, context.refs, number));
+export const resolve = (context, ref) => framed(context, 'settings', () => resolvePage(context.repo, context.refs, ref || context.head));
+export const settings = (context) => framed(context, 'settings', async () => main.replaceChildren(await branchTools(context.repo, context.refs, context.head)));
 
 // For the tests and for debugging by hand.
 window.holoGit = { corruptObject, stats, decisions, bundleOf, getRefs };
