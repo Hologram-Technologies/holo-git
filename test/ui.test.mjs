@@ -4,6 +4,7 @@
 
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, makeFixture, root } from './helpers.mjs';
@@ -17,6 +18,8 @@ let prefixed;
 let remote;
 
 before(async () => {
+  // web/sw.js is generated, not committed. Write it from the files as they are, as the build does, so the page under test is pinned.
+  execFileSync(process.execPath, [join(root, 'scripts', 'shell-manifest.mjs')]);
   browser = await launch();
   site = await serveWeb();
   prefixed = await serveWeb({ prefix: '/project/' });
