@@ -32,7 +32,10 @@ after(async () => {
 function token(theme, name) {
   const css = readFileSync(join(root, 'web', 'ui', 'tokens.css'), 'utf8');
   const block = css.slice(css.indexOf(`[data-theme="${theme}"]`));
-  const value = block.slice(0, block.indexOf('}')).match(new RegExp(`${name}: (#[0-9a-f]{6})`))[1];
+  const rules = block.slice(0, block.indexOf('}'));
+  let value = `var(${name})`;
+  // A token may name another token; follow it to the colour.
+  for (let i = 0; i < 6 && value.startsWith('var('); i += 1) value = rules.match(new RegExp(`${value.slice(4, -1)}: ([^;]+);`))[1];
   return `rgb(${[1, 3, 5].map((i) => parseInt(value.slice(i, i + 2), 16)).join(', ')})`;
 }
 
@@ -65,7 +68,7 @@ test('landing: a signed-out visitor sees one action; an unknown address shows th
   assert.equal(await page.path(), '/no/such/place/here/at/all');
   assert.match(await page.text(), new RegExp(S.repo.notHere));
   await page.goto(`${site.url}settings/nothing`);
-  await page.waitFor(`location.pathname === '/welcome'`, 'settings needs first run');
+  await page.arrive('/welcome');
   noErrors(page);
   await page.close();
 });
@@ -93,7 +96,7 @@ test('first run: a name, a sign-in key, then a choice; blank and malformed field
   await page.waitFor(`document.querySelector('#main h1').textContent === ${JSON.stringify(S.welcome.repoTitle)}`, 'the third step');
   assert.equal(await page.eval("document.querySelectorAll('#header details.menu').length"), 2, 'the create and account menus appear');
   await page.click('a', S.welcome.later);
-  await page.waitFor("location.pathname === '/'", 'home');
+  await page.arrive('/');
   assert.equal(await page.text('#main h1'), S.home.title);
   assert.match(await page.text(), new RegExp(S.home.empty));
   // First run is not offered twice.
@@ -107,7 +110,7 @@ test('new repository: created with a first commit and listed on home; a bad or t
   const page = await open();
   await signIn(page);
   await page.click('a', S.welcome.create);
-  await page.waitFor("location.pathname === '/new'", 'the form');
+  await page.arrive('/new');
   const name = await page.field(S.newRepo.name);
   // Failures: blank, then characters a repository name cannot have.
   await page.click('button', S.newRepo.create);
@@ -119,14 +122,14 @@ test('new repository: created with a first commit and listed on home; a bad or t
   await page.fill(name, 'hello-world');
   await page.fill(await page.field(S.newRepo.description), 'A first repository');
   await page.click('button', S.newRepo.create);
-  await page.waitFor("location.pathname === '/hello-world/tree/main'", 'the new repository');
+  await page.arrive('/hello-world/tree/main');
   assert.match(await page.text(), /README\.md/);
   assert.match(await page.text(), /A first repository/);
   assert.match(await page.text(), new RegExp(S.newRepo.initial));
   assert.equal(await page.eval('document.title'), `hello-world · ${PRODUCT}`);
 
   await page.click('a.brand');
-  await page.waitFor("location.pathname === '/'", 'home');
+  await page.arrive('/');
   assert.match(await page.text(), /hello-world/);
   assert.match(await page.text(), new RegExp(S.home.local));
   // Failure: the same name again.
@@ -157,7 +160,7 @@ test('open repository: a repository served as files is copied in; a bad or dead 
 
   await page.fill(address, `${remote.url}fixture.git`);
   await page.click('button', S.openRepo.open);
-  await page.waitFor("location.pathname === '/fixture/tree/main'", 'the opened repository');
+  await page.arrive('/fixture/tree/main');
   assert.match(await page.text(), /docs/);
   assert.match(await page.text(), /A repository for tests\./);
   noErrors(page);
@@ -176,10 +179,10 @@ test('settings: the profile is validated and saved; a theme is applied at once, 
   await page.fill(name, 'Grace Hopper');
   await page.click('button', S.settings.saveProfile);
   await page.waitFor("!!document.querySelector('#main .flash.success')", 'the saved message');
-  assert.equal(await page.eval("document.querySelector('#header .avatar').getAttribute('aria-label')"), 'Grace Hopper', 'the header follows the profile');
+  await page.waitFor("document.querySelector('#header .avatar').getAttribute('aria-label') === 'Grace Hopper'", 'the header to follow the profile');
 
   await page.click('.sidenav a', S.settings.appearance);
-  await page.waitFor("location.pathname === '/settings/appearance'", 'appearance');
+  await page.arrive('/settings/appearance');
   const background = () => page.eval('getComputedStyle(document.body).backgroundColor');
   assert.equal(await page.eval('document.documentElement.dataset.theme'), 'light', 'follows the system by default');
   assert.equal(await background(), token('light', '--bgColor-default'));
@@ -214,18 +217,20 @@ test('addresses: back, forward, reload and deep links work, and scroll position 
   await page.goto(`${site.url}-/gallery`);
   await page.eval('window.scrollTo(0, 900)');
   await page.waitFor('history.state && history.state.y === 900', 'the scroll position to be remembered');
-  await page.click('a.brand');
-  await page.waitFor("location.pathname === '/'", 'home');
+  // Follow a link without the pointer (as Enter on a focused link does), so the test itself does not scroll the page.
+  await page.eval("document.querySelector('a.brand').click()");
+  await page.arrive('/');
   assert.equal(await page.eval('window.scrollY'), 0);
   assert.equal(await page.eval("document.activeElement.id"), 'main', 'focus moves to the new screen');
   await page.eval('history.back()');
-  await page.waitFor("location.pathname === '/-/gallery' && window.scrollY === 900", 'the gallery, scrolled where it was');
+  await page.arrive('/-/gallery');
+  await page.waitFor('window.scrollY === 900', 'the scroll position to return');
   await page.eval('history.forward()');
-  await page.waitFor("location.pathname === '/' && !!document.querySelector('#main h1')", 'home again');
+  await page.arrive('/');
 
   // An address written by an older screen ('#/name/view') becomes a path.
-  await page.goto(`${site.url}#/settings/appearance`);
-  assert.equal(await page.path(), '/settings/appearance');
+  await page.eval("location.hash = '#/settings/appearance'");
+  await page.arrive('/settings/appearance');
   assert.equal(await page.text('#main h2'), S.settings.themeTitle);
 
   // Once the service worker is in place it answers deep links itself, so a reload works with the host gone.
@@ -246,8 +251,11 @@ test('served under a path prefix, every address keeps the prefix', async () => {
   await signIn(page);
   assert.equal(await page.path(), '/project/welcome?step=3');
   await page.click('a', S.welcome.later);
-  await page.waitFor("location.pathname === '/project/'", 'home under the prefix');
-  await page.goto(`${prefixed.url}settings/appearance`).catch(() => {});
+  await page.arrive('/project/');
+  // A deep link under the prefix, before the service worker exists: the host's 404 page finds the root by itself.
+  await page.goto(`${prefixed.url}settings/appearance`);
+  assert.equal(await page.path(), '/project/settings/appearance');
+  assert.equal(await page.text('#main h2'), S.settings.themeTitle);
   noErrors(page);
   await page.close();
 });
@@ -298,15 +306,15 @@ test('a repository screen sits in the new frame: tabs, the go-to keys, and the p
   await page.goto(`${site.url}new`);
   await page.fill(await page.field(S.newRepo.name), 'demo');
   await page.click('button', S.newRepo.create);
-  await page.waitFor("location.pathname === '/demo/tree/main'", 'the repository');
+  await page.arrive('/demo/tree/main');
   assert.equal(await page.eval("document.querySelector('#main nav.tabs a[aria-current=page]').textContent"), S.repo.code);
   await page.eval('document.activeElement.blur()');
   await page.press('g'); await page.press('p');
-  await page.waitFor("location.pathname === '/demo/pulls'", 'pull requests, by keyboard');
+  await page.arrive('/demo/pulls');
   await page.press('g'); await page.press('c');
-  await page.waitFor("location.pathname === '/demo'", 'code, by keyboard');
+  await page.arrive('/demo');
   await page.click('#main nav.tabs a', S.repo.commits);
-  await page.waitFor("location.pathname === '/demo/commits/main'", 'commits');
+  await page.arrive('/demo/commits/main');
   assert.match(await page.text(), new RegExp(S.newRepo.initial));
   // Failure: a repository this browser does not hold.
   await page.goto(`${site.url}nothing-here`);

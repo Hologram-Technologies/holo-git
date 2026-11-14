@@ -49,7 +49,7 @@ What works, tested in a browser:
 - Line diffs on each commit, with context, computed by a minimal Myers diff in the engine.
 - Blame for any file, following the first-parent line. Commits that left the file's label unchanged are skipped without reading it.
 
-- The page is pinned. A service worker holds the SHA-256 of each of the page's eight files and serves only bytes that match. The footer shows one digest naming the whole page; each deploy prints the same digest in its run summary.
+- The page is pinned. A service worker holds the SHA-256 of each of the page's files (31 today) and serves only bytes that match. The About dialog, opened from the footer, shows one digest naming the whole page; each deploy prints the same digest in its run summary.
 - A new version never takes over silently: the page shows its digest and waits for the visitor to accept it.
 - Offline: once loaded, the page and every cloned repository work with no network.
 
@@ -66,7 +66,8 @@ Not done yet: rename detection (a rename shows as a removal and an addition), bl
 ```bash
 (cd engine && cargo test --release)
 sh scripts/build-web.sh
-python -m http.server 8731 --directory web
+node scripts/build-ui.mjs
+node scripts/dev-web.mjs 8731
 ```
 
 ## The write path
@@ -74,7 +75,7 @@ python -m http.server 8731 --directory web
 First slice of Phase 3. A commit can be made in the browser and taken to any git.
 
 - Edit a file on a branch and commit. The engine serialises the blob, the trees on the file's path and the commit, and gives them the identifiers git would. Every other subtree is reused by its identifier, unread.
-- The proved kernel is in the page. `web/kernel.wasm` is the 2.5 KB guest built from `src/`; it imports nothing. Every object read asks it whether the label matches (the restore decision), and every ref update asks it whether the update counts (the authorize decision). The footer counts the decisions.
+- The proved kernel is in the page. `web/kernel.wasm` is the 2.5 KB guest built from `src/`; it imports nothing. Every object read asks it whether the label matches (the restore decision), and every ref update asks it whether the update counts (the authorize decision). The count is kept in `window.holoGit.decisions`; the interface no longer shows it.
 - Ref updates are signed. Each device generates a non-extractable ECDSA P-256 key. A ref moves only as a signed record that names the previous record's digest; the signature is checked, the kernel is asked, and the ref and its log entry change in one transaction, only if the ref still holds the value the update was signed against.
 - Download a branch as a git bundle. `git pull repo-main.bundle main` fetches it.
 

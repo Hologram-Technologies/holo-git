@@ -12,10 +12,10 @@ const notices = () => document.getElementById('notices');
 
 // The complete header, as it will be once search, issues, pull request lists, explore and notifications exist.
 // `only` limits it to the parts whose screens exist today; the gallery passes nothing and shows all of it.
-export function headerNode({ user, only }) {
+export function headerNode({ user, only, bare }) {
   const has = (part) => !only || only.includes(part);
   const brand = el('a', { class: 'brand', href: href('/'), 'aria-label': S.header.home }, mark(), el('span', {}, PRODUCT));
-  if (!user) return el('div', { class: 'app-header' }, brand, el('span', { class: 'spacer' }), offlineNode(), button({ label: S.header.getStarted, kind: 'primary', href: href('/welcome') }));
+  if (!user) return el('div', { class: 'app-header' }, brand, el('span', { class: 'spacer' }), offlineNode(), bare ? '' : button({ label: S.header.getStarted, kind: 'primary', href: href('/welcome') }));
   return el('div', { class: 'app-header' }, brand,
     has('search') && el('div', { class: 'search', role: 'search' }, icon('search'), el('input', { class: 'input', type: 'search', placeholder: S.header.searchPlaceholder, 'aria-label': S.header.search, 'data-shortcut': 'search' }), el('kbd', { 'aria-hidden': 'true' }, '/')),
     el('nav', { 'aria-label': S.header.navigation },
@@ -39,10 +39,11 @@ function offlineNode() {
   return node;
 }
 
-let current = { user: null, repo: null };
+let current = { user: null, repo: null, firstRun: false };
 export function drawFrame(state) {
   current = { ...current, ...state };
-  header().replaceChildren(headerNode({ user: current.user, only: [] }));
+  // During first run the header offers nothing: the screen itself is the one action.
+  header().replaceChildren(headerNode({ user: current.user, only: [], bare: current.firstRun }));
   footer().replaceChildren(
     el('span', {}, PRODUCT),
     el('button', { type: 'button', class: 'btn-link', onclick: openAbout }, S.footer.about),

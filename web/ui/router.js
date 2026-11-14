@@ -31,9 +31,17 @@ export const notFound = (handler) => { fallback = handler; };
 export const onError = (handler) => { failed = handler; };
 export const afterEach = (handler) => { after = handler; };
 
-async function render({ restore } = {}) {
+// Screens draw as they go, so two must never draw at once: each waits for the one before, and a request
+// that has been overtaken by a newer one is dropped before it starts.
+let drawing = Promise.resolve();
+function render(options = {}) {
   token += 1;
   const mine = token;
+  drawing = drawing.then(() => (mine === token ? draw(options, mine) : undefined)).catch((error) => { console.error(error); });
+  return drawing;
+}
+
+async function draw({ restore }, mine) {
   const path = currentPath();
   const query = new URLSearchParams(location.search);
   let handler = fallback;
@@ -45,7 +53,10 @@ async function render({ restore } = {}) {
   let result;
   try { result = await handler({ path, params, query }); } catch (error) { if (mine !== token) return; result = await failed(error, { path, params, query }); }
   if (mine !== token) return;
-  after({ path, params, result: result || {}, restore });
+  await after({ path, params, result: result || {}, restore });
+  if (mine !== token) return;
+  // The screen for this address is fully drawn. Tests wait on this instead of guessing.
+  document.documentElement.dataset.screen = location.pathname;
   const y = restore && history.state && typeof history.state.y === 'number' ? history.state.y : 0;
   if (location.hash.length > 1 && !restore) { const target = document.getElementById(decodeURIComponent(location.hash.slice(1))); if (target) { target.scrollIntoView(); return; } }
   window.scrollTo(0, y);
@@ -53,12 +64,16 @@ async function render({ restore } = {}) {
 
 const remember = () => { try { history.replaceState({ ...(history.state || {}), y: window.scrollY }, ''); } catch { /* detached document */ } };
 
-export function navigate(to, { replace = false } = {}) {
-  const url = new URL(to.startsWith('/') ? href(to) : to, location.href);
-  if (url.origin !== location.origin) { location.href = url.href; return Promise.resolve(); }
+// Go to a full address on this origin.
+function go(url, replace) {
+  clearTimeout(remember.timer);
   if (!replace) remember();
   history[replace ? 'replaceState' : 'pushState']({ y: 0 }, '', url);
   return render();
+}
+// Go to a screen by its path inside the app ('/settings/profile'), whatever prefix the page is served under.
+export function navigate(to, { replace = false } = {}) {
+  return go(new URL(href(to), location.href), replace);
 }
 // Draw the current screen again after something changed underneath it.
 export const refresh = () => render({ restore: true });
@@ -73,7 +88,8 @@ export function start() {
   if (carried && carried.startsWith('/')) history.replaceState({ y: 0 }, '', href(carried));
   else if (legacy(location.hash)) history.replaceState({ y: 0 }, '', href(legacy(location.hash)));
 
-  window.addEventListener('popstate', () => render({ restore: true }));
+  // A scroll position still waiting to be saved belongs to the screen being left; drop it.
+  window.addEventListener('popstate', () => { clearTimeout(remember.timer); if (legacy(location.hash) === null) render({ restore: true }); });
   window.addEventListener('hashchange', () => {
     const path = legacy(location.hash);
     if (path !== null) { history.replaceState({ y: 0 }, '', href(path)); render(); } else if (!location.hash) render({ restore: true });
@@ -98,7 +114,7 @@ export function start() {
     if (/\/fixtures\//.test(url.pathname)) return;
     event.preventDefault();
     if (url.pathname === location.pathname && url.search === location.search && url.hash) { location.hash = url.hash; return; }
-    navigate(url.pathname + url.search + url.hash);
+    go(url, false);
   });
   return render({ restore: true });
 }

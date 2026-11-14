@@ -55,3 +55,5 @@
 .legacy .access input[type=number] { width: 150px; }
 .legacy .access button { padding: 4px 10px; font-size: 13px; }
 .legacy .access input[type=password], .legacy .access input[type=text]:not([readonly]) { flex: 1 1 140px; padding: 4px 8px; font-size: 13px; }
+.legacy .tabs a { color: var(--fgColor-default); }
+.legacy .tabs a:hover { text-decoration: none; }

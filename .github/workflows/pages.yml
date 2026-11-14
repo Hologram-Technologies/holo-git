@@ -58,7 +58,7 @@ jobs:
           {
             echo '## Page digest'
             echo
-            echo 'The live page shows this value in its footer. If the two differ, do not accept the page.'
+            echo 'The live page shows this value in its About dialog, opened from the footer. If the two differ, do not accept the page.'
             echo
             echo '```'
             grep '^shell:' build.log

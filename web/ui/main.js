@@ -15,7 +15,7 @@ import { gallery } from './gallery.js';
 applyTheme();
 watchTheme();
 
-const frame = async () => drawFrame({ user: (await signedIn()) ? { name: profile().name } : null });
+const frame = async (path) => drawFrame({ user: (await signedIn()) ? { name: profile().name } : null, ...(path === undefined ? {} : { firstRun: path === '/welcome' }) });
 
 route('/', home);
 route('/welcome', welcome);
@@ -31,16 +31,15 @@ notFound(notFoundPage);
 onError(errorPage);
 
 let first = true;
-afterEach(async ({ params, result }) => {
+afterEach(async ({ path, result }) => {
   document.title = result.title ? `${result.title} · ${PRODUCT}` : PRODUCT;
   setRepoContext(result.repo || null);
-  await frame();
+  await frame(path);
   // After a navigation, a keyboard or screen-reader user starts at the new screen, not at the old link.
   if (!first && !document.activeElement.closest('#main')) document.getElementById('main').focus({ preventScroll: true });
   first = false;
-  void params;
 });
-document.addEventListener('profilechange', frame);
+document.addEventListener('profilechange', () => frame());
 
 await Promise.all([loadEngine(new URL('../engine.wasm', import.meta.url).href), loadKernel(new URL('../kernel.wasm', import.meta.url).href)]);
 await openStore();

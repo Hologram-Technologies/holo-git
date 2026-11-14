@@ -51,7 +51,7 @@ export async function welcome({ query }) {
   const key = await hasKey();
   // The step follows from what exists, not from the address: no name yet, no key yet, or both.
   const step = !who.name || query.get('step') === '1' ? 1 : !key ? 2 : 3;
-  const steps = el('ol', { class: 'steps', 'aria-label': S.welcome.progress }, S.welcome.steps.map((text, i) => el('li', { 'aria-current': i + 1 === step ? 'step' : undefined }, i + 1 < step ? icon('check', { class: 'fg-success' }) : `${i + 1}.`, text)));
+  const steps = el('ol', { class: 'steps', 'aria-label': S.welcome.progress }, S.welcome.steps.map((text, i) => el('li', { 'aria-current': i + 1 === step ? 'step' : undefined }, i + 1 < step ? icon('check', { class: 'fg-success' }) : el('span', {}, `${i + 1}.`), el('span', {}, text))));
   let body;
   if (step === 1) {
     const name = field({ label: S.welcome.name, control: textInput({ value: who.name, autocomplete: 'name', autofocus: true }) });

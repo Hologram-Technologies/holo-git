@@ -75,9 +75,11 @@ export async function launch() {
     };
     // The app has drawn a screen: it sets data-ready on <html> once, and every screen sets the title.
     page.ready = () => page.waitFor("document.documentElement.dataset.ready === '' && document.getElementById('main').childElementCount > 0", 'the first screen');
-    page.goto = async (to) => { await cdp('Page.navigate', { url: to }); await page.ready(); };
+    page.goto = async (to) => { await page.eval("delete document.documentElement.dataset.ready").catch(() => {}); await cdp('Page.navigate', { url: to }); await page.ready(); };
     page.reload = async () => { await page.eval("delete document.documentElement.dataset.ready"); await cdp('Page.reload'); await page.ready(); };
     page.path = () => page.eval('location.pathname + location.search');
+    // Wait until the screen for this path has been drawn (the router marks it), not merely until the address changed.
+    page.arrive = (path) => page.waitFor(`document.documentElement.dataset.screen === ${JSON.stringify(path)} && location.pathname === ${JSON.stringify(path)}`, `the screen at ${path}`);
     page.text = (selector = '#main') => page.eval(`document.querySelector(${JSON.stringify(selector)}).innerText`);
     page.exists = (selector) => page.eval(`!!document.querySelector(${JSON.stringify(selector)})`);
     const find = (selector, text) => `[...document.querySelectorAll(${JSON.stringify(selector)})].find((n) => ${text === undefined ? 'true' : `n.textContent.trim() === ${JSON.stringify(text)}`})`;
@@ -100,7 +102,7 @@ export async function launch() {
       await cdp('Input.dispatchKeyEvent', { type: printable ? 'keyDown' : 'rawKeyDown', ...base, text: printable ? key : undefined });
       await cdp('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
     };
-    page.field = (labelText) => page.eval(`(() => { const l = [...document.querySelectorAll('label')].find((n) => n.textContent.trim().startsWith(${JSON.stringify(labelText)})); return l ? '#' + l.getAttribute('for') : null; })()`);
+    page.field = (labelText) => page.waitFor(`(() => { const l = [...document.querySelectorAll('label')].find((n) => n.textContent.trim().startsWith(${JSON.stringify(labelText)})); return l ? '#' + l.getAttribute('for') : null; })()`, `a field labelled ${labelText}`);
     page.setViewport = (w, h) => cdp('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: w < 500 });
     page.offline = (offline) => cdp('Network.emulateNetworkConditions', { offline, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
     page.close = async () => { listeners.delete(sessionId); await send('Target.disposeBrowserContext', { browserContextId }).catch(() => {}); };
