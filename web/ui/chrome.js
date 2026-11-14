@@ -29,6 +29,8 @@ export function headerNode({ user, only, bare }) {
       { label: S.header.newRepository, icon: 'repo', href: href('/new') }, { label: S.header.openRepository, icon: 'download', href: href('/open') }] }),
     menu({ align: 'end', trigger: el('summary', { class: 'btn btn-invisible btn-icon', 'aria-label': S.header.account, 'aria-haspopup': 'menu' }, avatar(user.name, { size: 24 })), items: [
       { heading: `${S.header.signedInAs} ${user.name}` }, 'divider',
+      // On a narrow screen the header has no room for these two links, so they are here.
+      ...(has('issues') ? [{ label: S.header.issues, icon: 'issue-opened', href: href('/issues'), narrow: true }] : []), ...(has('pulls') ? [{ label: S.header.pulls, icon: 'git-pull-request', href: href('/pulls'), narrow: true }] : []),
       { label: S.header.settings, icon: 'gear', href: href('/settings/profile') },
       { label: S.header.shortcuts, icon: 'question', onclick: openShortcuts },
       { label: S.header.gallery, icon: 'table', href: href('/-/gallery') }] }));
@@ -44,7 +46,7 @@ let current = { user: null, repo: null, firstRun: false };
 export function drawFrame(state) {
   current = { ...current, ...state };
   // During first run the header offers nothing: the screen itself is the one action.
-  header().replaceChildren(headerNode({ user: current.user, only: ['issues'], bare: current.firstRun }));
+  header().replaceChildren(headerNode({ user: current.user, only: ['issues', 'pulls'], bare: current.firstRun }));
   footer().replaceChildren(
     el('span', {}, PRODUCT),
     el('button', { type: 'button', class: 'btn-link', onclick: openAbout }, S.footer.about),

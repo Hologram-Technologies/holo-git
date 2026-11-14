@@ -3,18 +3,15 @@
 // and are replaced in later phases. Their wording is the old one; docs/UI-STRINGS.md maps each string to what replaces it.
 // Repository content is only ever placed with textContent, never parsed as HTML.
 
-import { open, diffLines, splitLines } from './engine.js';
 import { getObject, getRefs, stats, corruptObject, setRepo } from './store.js';
 import { decisions } from './kernel.js';
 import { S } from './ui/strings.js';
 import * as ui from './ui/components.js';
 import { repoHeader, ownerOf } from './ui/repo.js';
-import { checkLog, deviceKey, grant, revoke, protect, unprotect, approve } from './identity.js';
-import { isAncestor } from './ancestry.js';
-import { expectedActions } from './evidence.js';
+import { checkLog, deviceKey, grant, revoke, protect, unprotect } from './identity.js';
 import { push, setCredentials, hasCredentials } from './replica.js';
-import { fetchFrom, updatePull } from './sync.js';
-import { resolveCommit, lookup, changedPaths, bundleOf, mergePull } from './git.js';
+import { fetchFrom } from './sync.js';
+import { bundleOf } from './git.js';
 
 const main = document.getElementById('main');
 const text = new TextDecoder('utf-8', { fatal: false });
@@ -38,49 +35,6 @@ const subject = (message) => message.split('\n')[0];
 
 // The frame draws the repository header now; the screens below still call this where it used to be.
 const header = () => '';
-
-const isBinary = (bytes) => bytes.subarray(0, 8000).includes(0);
-const shown = (line) => text.decode(line).replace(/\r?\n$/, '');
-const MAX_DIFF_LINES = 3000;
-
-// A unified view of one file's change, with three lines of context around each change.
-async function fileDiff(change, oldTree, newTree) {
-  const read = async (tree) => {
-    if (!tree) return new Uint8Array();
-    try { return open(await getObject((await lookup(tree, change.path)).id)).content; } catch { return new Uint8Array(); }
-  };
-  const before = change.status === 'added' ? new Uint8Array() : await read(oldTree);
-  const after = change.status === 'removed' ? new Uint8Array() : await read(newTree);
-  if (isBinary(before) || isBinary(after)) return el('p', { class: 'muted' }, 'Binary file.');
-  const oldLines = splitLines(before);
-  const newLines = splitLines(after);
-  if (oldLines.length + newLines.length > MAX_DIFF_LINES) return el('p', { class: 'muted' }, `Large change (${oldLines.length} lines before, ${newLines.length} after) not shown.`);
-  const rows = [];
-  let i = 0;
-  let j = 0;
-  for (const run of diffLines(before, after)) {
-    for (let n = 0; n < run.count; n += 1) {
-      if (run.op === 'equal') { rows.push({ op: ' ', a: i + 1, b: j + 1, line: newLines[j] }); i += 1; j += 1; }
-      else if (run.op === 'delete') { rows.push({ op: '-', a: i + 1, b: '', line: oldLines[i] }); i += 1; }
-      else { rows.push({ op: '+', a: '', b: j + 1, line: newLines[j] }); j += 1; }
-    }
-  }
-  const keep = new Uint8Array(rows.length);
-  rows.forEach((row, at) => { if (row.op !== ' ') for (let k = Math.max(0, at - 3); k <= Math.min(rows.length - 1, at + 3); k += 1) keep[k] = 1; });
-  const out = [];
-  let gap = false;
-  rows.forEach((row, at) => {
-    if (!keep[at]) { gap = true; return; }
-    if (gap && out.length) out.push(el('tr', { class: 'gap' }, el('td', { colspan: '4' }, '⋯')));
-    gap = false;
-    out.push(el('tr', { class: row.op === '+' ? 'add' : row.op === '-' ? 'del' : '' },
-      el('td', { class: 'n' }, row.a), el('td', { class: 'n' }, row.b), el('td', { class: 'sign' }, row.op), el('td', {}, el('pre', {}, shown(row.line)))));
-  });
-  const added = rows.filter((row) => row.op === '+').length;
-  const removed = rows.filter((row) => row.op === '-').length;
-  return el('div', {}, el('p', { class: 'muted mono counts' }, el('span', { class: 'st added' }, `+${added}`), ' ', el('span', { class: 'st removed' }, `-${removed}`)),
-    el('table', { class: 'code diff' }, out));
-}
 
 const saved = (key) => { try { return localStorage.getItem(key) || ''; } catch { return ''; } };
 
@@ -123,81 +77,7 @@ async function resolvePage(repo, refs, ref) {
 }
 
 const keyName = (key, mine, owner) => `${key.slice(0, 8)}${key === mine ? ' (this device)' : ''}${key === owner ? ' (owner)' : ''}`;
-
-async function pullsPage(repo, refs, ref) {
-  const log = await checkLog(repo.name);
-  if (!log.valid) throw new Error(`This repository's signed log does not verify: ${log.reason}`);
-  const mine = (await deviceKey()).id;
-  const rows = [...log.state.pulls].reverse().map((pull) => el('tr', {},
-    el('td', {}, link(`#/${ownerOf(repo)}/${repo.name}/pull/${pull.number}`, `#${pull.number} ${pull.title}`)),
-    el('td', { class: 'muted' }, keyName(pull.author, mine, log.state.owner)),
-    el('td', { class: 'muted' }, pull.ref.slice(11)),
-    el('td', {}, pull.merged ? 'merged' : `open · ${pull.counted} of ${pull.needed} approvals`)));
-  main.replaceChildren(header(repo, refs, ref, 'pulls'),
-    rows.length ? el('table', { class: 'files' }, rows) : el('p', { class: 'muted' }, 'No pull requests. Edit a file and choose "Propose as a pull request".'));
-}
-
-async function pullPage(repo, refs, number) {
-  const log = await checkLog(repo.name);
-  if (!log.valid) throw new Error(`This repository's signed log does not verify: ${log.reason}`);
-  const pull = log.state.pulls.find((candidate) => String(candidate.number) === String(number));
-  if (!pull) throw new Error(`There is no pull request #${number}.`);
-  const branch = pull.ref.slice(11);
-  const mine = (await deviceKey()).id;
-  const baseHead = refs[pull.ref];
-  const upToDate = pull.merged || await isAncestor(baseHead, pull.head) === true;
-  // What it changes: from the point where it left the branch to the proposed commit.
-  const onBranch = new Set();
-  for (const queue = [baseHead]; queue.length;) {
-    const id = queue.pop();
-    if (onBranch.has(id)) continue;
-    onBranch.add(id);
-    queue.push(...(await resolveCommit(refs, id)).commit.parents);
-  }
-  const head = (await resolveCommit(refs, pull.head)).commit;
-  let fork = head.parents[0];
-  while (fork && !onBranch.has(fork)) fork = (await resolveCommit(refs, fork)).commit.parents[0];
-  const forkTree = fork ? (await resolveCommit(refs, fork)).commit.tree : null;
-  const changes = await changedPaths(forkTree, head.tree);
-  const sections = [];
-  for (const change of changes) {
-    sections.push(el('section', { class: 'file' },
-      el('h3', {}, el('span', { class: `st ${change.status}` }, change.status), ' ', change.path), await fileDiff(change, forkTree, head.tree)));
-  }
-  // Required checks: what this exact change needs, and whether a result for it already exists.
-  const rule = log.state.protections.get(pull.ref);
-  const required = rule ? rule.checks : [];
-  const expected = required.length && !pull.merged ? await expectedActions(baseHead, pull.head, required) : null;
-  const checkRows = expected ? required.map((name, i) => {
-    const result = expected[i] && log.state.checks.get(expected[i]);
-    const state = !expected[i] ? 'not defined on the branch, so it cannot pass'
-      : !result ? 'no result yet for this content'
-        : `${result.result}${result.changed ? ' (results under this key have differed: flaky)' : ''}, published by ${keyName(result.by, mine, log.state.owner)} on ${when(result.time)}`;
-    return el('tr', {}, el('td', {}, name), el('td', { class: result && result.result === 'pass' ? 'st added' : 'st removed' }, state), el('td', { class: 'mono muted' }, expected[i] ? expected[i].slice(0, 12) : ''));
-  }) : [];
-  const note = el('span', { class: 'muted' });
-  const act = (label, work) => el('button', { onclick: async () => {
-    try { await work(); window.dispatchEvent(new HashChangeEvent('hashchange')); } catch (error) { note.textContent = ` ${error.message}`; }
-  } }, label);
-  const who = { name: saved('holo-git-name'), email: saved('holo-git-email') };
-  const approvers = [...pull.approvals].map((key) => keyName(key, mine, log.state.owner) + (key === pull.author ? ', does not count: the proposer' : ''));
-  const actions = pull.merged ? [] : [
-    pull.approvals.has(mine) ? '' : act('Approve this commit', () => approve(repo.name, branch, pull.head)),
-    upToDate ? act('Merge', async () => { const merged = await mergePull({ repo, refs, branch, head: pull.head }); location.hash = `#/${ownerOf(repo)}/${repo.name}/commit/${merged.id}`; })
-      : act(`Bring up to date with ${branch}`, async () => { await updatePull({ repo, refs, branch, head: pull.head, title: pull.title, who }); location.hash = `#/${ownerOf(repo)}/${repo.name}/pulls`; }),
-  ];
-  main.replaceChildren(header(repo, refs, branch, 'pulls'),
-    el('h2', {}, `#${pull.number} ${pull.title}`),
-    el('p', {}, pull.merged ? 'Merged' : 'Open', el('span', { class: 'muted' }, ` · into ${branch} · proposed by ${keyName(pull.author, mine, log.state.owner)} on ${when(pull.time)}`)),
-    el('p', { class: 'mono muted' }, 'commit ', link(`#/${ownerOf(repo)}/${repo.name}/commit/${pull.head}`, short(pull.head)),
-      upToDate ? '' : ` · behind ${branch}: it must be brought up to date before it can merge`),
-    el('p', {}, `Approvals that count: ${pull.counted} of ${pull.needed} required.`,
-      el('span', { class: 'muted' }, approvers.length ? ` Approved by ${approvers.join('; ')}.` : ' Nobody has approved this commit.')),
-    checkRows.length ? el('table', { class: 'files' }, checkRows) : '',
-    checkRows.length ? el('p', { class: 'muted' }, 'A check is keyed by the content it reads. A result for the same content counts, whichever commit it was made for.') : '',
-    el('p', { class: 'push' }, actions, note),
-    el('h2', {}, `${changes.length} changed file${changes.length === 1 ? '' : 's'}`), ...sections);
-}
+void keyName;
 
 async function accessTools(repo, log, branch) {
   const key = await deviceKey();
@@ -318,10 +198,8 @@ async function framed(context, tab, draw) {
   const body = el('div', { class: 'page legacy' }, ...main.childNodes);
   main.className = 'page wide';
   main.replaceChildren(repoHeader(context, tab), body);
-  return { title: `${tab === 'pulls' ? S.repo.pulls : S.repo.settings} \u00b7 ${context.repo.name}`, repo: context.repo };
+  return { title: `${S.repo.settings} \u00b7 ${context.repo.name}`, repo: context.repo };
 }
-export const pulls = (context) => framed(context, 'pulls', () => pullsPage(context.repo, context.refs, context.head));
-export const pull = (context, number) => framed(context, 'pulls', () => pullPage(context.repo, context.refs, number));
 export const resolve = (context, ref) => framed(context, 'settings', () => resolvePage(context.repo, context.refs, ref || context.head));
 export const settings = (context) => framed(context, 'settings', async () => main.replaceChildren(await branchTools(context.repo, context.refs, context.head)));
 

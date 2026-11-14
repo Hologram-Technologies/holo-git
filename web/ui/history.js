@@ -5,6 +5,7 @@ import { el, icon, button, box, boxRow, blankslate, avatar, relativeTime, segmen
 import { navigate } from './router.js';
 import { repoHeader, refSwitcher, repoHref, repoPath, show, short, decode, isBinary } from './repo.js';
 import { commitAt, missing } from './code.js';
+import { proposeForm } from './pulls.js';
 import { getObject } from '../store.js';
 import { open, diffLines, splitLines } from '../engine.js';
 import { resolveCommit, readTree, lookup, history as walk, changedPaths, person, fileVersions } from '../git.js';
@@ -85,9 +86,15 @@ async function fileRows(change, oldTree, newTree) {
   return { rows, added: all.filter((r) => r.op === '+').length, removed: all.filter((r) => r.op === '-').length };
 }
 
-function unified(rows) {
-  return el('table', { class: 'diff' }, el('tbody', {}, rows.map((row) => el('tr', { class: { '+': 'add', '-': 'del', '@': 'hunk' }[row.op] || '' }, el('td', { class: 'num' }, row.a ?? ''), el('td', { class: 'num' }, row.b ?? ''),
-    el('td', { class: 'sign' }, row.op === '@' ? '' : row.op), el('td', { class: 'text' }, row.text)))));
+// hooks.cell(path, row, tr) may return a control for the line; hooks.after(path, row) may return rows to show under it.
+function unified(rows, hooks = {}, path = '') {
+  return el('table', { class: 'diff' }, el('tbody', {}, rows.flatMap((row) => {
+    const text = el('td', { class: 'text' }, row.text);
+    const tr = el('tr', { class: { '+': 'add', '-': 'del', '@': 'hunk' }[row.op] || '' }, el('td', { class: 'num' }, row.a ?? ''), el('td', { class: 'num' }, row.b ?? ''), el('td', { class: 'sign' }, row.op === '@' ? '' : row.op), text);
+    const control = hooks.cell && row.op !== '@' ? hooks.cell(path, row, tr) : null;
+    if (control) text.prepend(control);
+    return [tr, ...(hooks.after && row.op !== '@' ? hooks.after(path, row) : [])];
+  })));
 }
 // Side by side: removed lines on the left, added lines on the right, paired in order within each run of changes.
 function split(rows) {
@@ -102,7 +109,7 @@ function split(rows) {
 
 const STATUS = { added: ['diff-added', 'fg-success'], removed: ['diff-removed', 'fg-danger'], modified: ['diff-modified', 'fg-attention'] };
 // The changed files between two trees: a summary line with the Unified / Split switch, a list of files, and each file's diff, which can be folded away.
-async function changes(context, oldTree, newTree, fileRef) {
+export async function changes(context, oldTree, newTree, fileRef, hooks = {}) {
   const list = await changedPaths(oldTree, newTree);
   let mode = saved('diff-view', 'unified') === 'split' && window.innerWidth >= 768 ? 'split' : 'unified';
   const files = [];
@@ -111,11 +118,13 @@ async function changes(context, oldTree, newTree, fileRef) {
   const bodies = [];
   const sections = files.map(({ change, result }, index) => {
     const body = el('div', { class: 'diff-body' });
-    const draw = () => body.replaceChildren(result.rows ? (mode === 'split' ? split(result.rows) : unified(result.rows)) : el('p', { class: 'box-body muted' }, result.note));
+    const draw = () => body.replaceChildren(result.rows ? (mode === 'split' ? split(result.rows) : unified(result.rows, hooks, change.path)) : el('p', { class: 'box-body muted' }, result.note));
     draw(); bodies.push(draw);
     const [name, tone] = STATUS[change.status];
-    return el('details', { class: 'box diff-file', open: true, id: `diff-${index}` }, el('summary', { class: 'box-head' }, icon('chevron-down', { class: 'fold' }), icon(name, { label: S.code.status[change.status], class: tone }),
+    const details = el('details', { class: 'box diff-file', open: true, id: `diff-${index}` }, el('summary', { class: 'box-head' }, icon('chevron-down', { class: 'fold' }), icon(name, { label: S.code.status[change.status], class: tone }),
       change.status === 'removed' ? el('span', { class: 'mono' }, change.path) : el('a', { class: 'mono', href: repoHref(context.repo, 'blob', fileRef, change.path) }, change.path), el('span', { class: 'spacer' }), diffstat(result.added, result.removed)), body);
+    if (hooks.file) hooks.file(change, details);
+    return details;
   });
   const summary = el('div', { class: 'row' }, el('span', {}, S.code.showing(list.length, added, removed)), el('span', { class: 'spacer' }),
     segmented([{ value: 'unified', label: S.code.unified }, { value: 'split', label: S.code.split }], mode, (value) => { mode = value; save('diff-view', value); bodies.forEach((draw) => draw()); }));
@@ -146,7 +155,7 @@ export async function compare(context, rest) {
   try { base = await resolveCommit(context.refs, baseName || context.head); head = await resolveCommit(context.refs, headName || ''); } catch { return missing(context, 'code', S.code.noCompare); }
   show('wide', repoHeader(context, 'code'), el('div', { class: 'page stack' }, el('div', { class: 'page-head' }, el('h1', { class: 'page-title' }, S.code.comparing)),
     el('div', { class: 'row' }, label(`${S.code.base}: ${baseName}`), icon('arrow-right', { class: 'fg-muted' }), label(`${S.code.compareWith}: ${headName}`)),
-    base.id === head.id ? flash('info', S.code.identical) : await changes(context, base.commit.tree, head.commit.tree, head.id)));
+    base.id === head.id ? flash('info', S.code.identical) : [context.branches.includes(baseName) ? proposeForm(context, baseName, head.id, subject(head.commit.message)) : '', await changes(context, base.commit.tree, head.commit.tree, head.id)]));
   return { title: `${S.code.comparing} ${baseName}...${headName} · ${context.repo.name}`, repo: context.repo };
 }
 

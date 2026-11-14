@@ -33,7 +33,7 @@ test('no string in the strings file contains a banned word, an exclamation mark,
   assert.ok(strings.length > 150, `the file holds the interface's wording (${strings.length} strings)`);
   const problems = [];
   for (const [path, text] of strings) {
-    const found = banned(withoutName(text), { labels: LABEL_ALLOWED.has(path) || path.startsWith('issues.') });
+    const found = banned(withoutName(text), { labels: LABEL_ALLOWED.has(path) || path.startsWith('issues.') || path.startsWith('pulls.') });
     if (found.length) problems.push(`${path}: "${text}" contains ${found.join(', ')}`);
     if (text.includes('!')) problems.push(`${path}: "${text}" has an exclamation mark`);
     // Sentence case: after the first word, a capital starts only a name the interface uses as a name.

@@ -33,7 +33,7 @@ async function ancestors(start) {
 
 // The newest commit both histories contain. With criss-cross history there can be several
 // candidates; the newest by committer time is used.
-async function mergeBase(ours, theirs) {
+export async function mergeBase(ours, theirs) {
   const mine = await ancestors(ours);
   let best = null;
   for (const id of await ancestors(theirs)) {

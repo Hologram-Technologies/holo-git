@@ -372,3 +372,25 @@ h2.day { display: flex; align-items: center; gap: var(--base-size-8); color: var
 .progress { height: var(--base-size-8); overflow: hidden; border-radius: var(--borderRadius-medium); background: var(--bgColor-neutral-muted); }
 .progress i { display: block; height: 100%; background: var(--bgColor-success-emphasis); }
 @media (max-width: 34rem) { .label-cell { flex-basis: var(--base-size-96); } .label-row .main { display: none; } .milestone-row { flex-wrap: wrap; } .milestone-progress { flex-basis: 100%; } }
+
+/* Pull requests */
+.merge-box.open { border-color: var(--borderColor-success-emphasis); }
+.merge-box.merged { border-color: var(--borderColor-done-emphasis); }
+.merge-box .box-row { align-items: center; }
+.merge-box .box-row:hover, .check-row:hover, .thread .box-row:hover { background: none; }
+.merge-action { background: var(--bgColor-muted); border-radius: 0 0 var(--borderRadius-medium) var(--borderRadius-medium); }
+.check-row { align-items: center; }
+.check-list { margin-top: var(--base-size-8); }
+.check-list .check-row { padding: var(--base-size-4) 0; border-top: 0; }
+.thread.resolved { opacity: 0.75; }
+.thread-entry .markdown { margin-top: var(--base-size-4); font-size: var(--text-body-size-medium); }
+.thread-entry + .thread-entry { padding-top: var(--base-size-8); border-top: var(--borderWidth-thin) solid var(--borderColor-muted); }
+.review-body { margin-left: var(--base-size-40); }
+.diff tr.line-form td, .diff tr.line-thread td { padding: var(--base-size-8) var(--base-size-16); white-space: normal; font-family: var(--fontStack-system); font-size: var(--text-body-size-medium); background: var(--bgColor-default); border-top: var(--borderWidth-thin) solid var(--borderColor-muted); border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted); }
+.diff td.text { position: relative; }
+.diff .line-add { position: absolute; left: calc(-1 * var(--base-size-28)); top: 0; height: var(--base-size-20); width: var(--base-size-20); opacity: 0; }
+.diff tr:hover .line-add, .diff .line-add:focus-visible { opacity: 1; }
+@media (hover: none) { .diff .line-add { opacity: 1; } }
+.viewed { font-size: var(--text-body-size-small); font-weight: var(--base-text-weight-normal); gap: var(--base-size-4); margin-left: var(--base-size-8); cursor: pointer; }
+.narrow-only { display: none; }
+@media (max-width: 34rem) { .app-header nav { display: none; } .menu-list li.narrow-only { display: block; } }

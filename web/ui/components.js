@@ -135,7 +135,7 @@ export function menu({ label: text, icon: leading, iconOnly, kind = 'default', s
     if (item.heading) return el('li', { class: 'heading', role: 'presentation' }, item.heading);
     const inner = [item.icon && icon(item.icon), item.label];
     const close = () => { details.open = false; };
-    return el('li', { role: 'none' }, item.href
+    return el('li', { role: 'none', class: item.narrow ? 'narrow-only' : undefined }, item.href
       ? el('a', { href: item.href, role: 'menuitem', class: item.danger ? 'danger' : '', onclick: close }, inner)
       : el('button', { type: 'button', role: 'menuitem', class: item.danger ? 'danger' : '', onclick: () => { close(); item.onclick(); } }, inner));
   })));

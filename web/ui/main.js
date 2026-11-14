@@ -9,6 +9,7 @@ import { load, splitRef } from './repo.js';
 import * as code from './code.js';
 import * as past from './history.js';
 import * as issues from './issues.js';
+import * as pulls from './pulls.js';
 import { el, counter } from './components.js';
 import { PRODUCT } from './strings.js';
 import { route, notFound, onError, afterEach, start } from './router.js';
@@ -30,6 +31,7 @@ route('/settings', (context) => settings({ ...context, params: { tab: 'profile' 
 route('/settings/:tab', settings);
 route('/-/gallery', gallery);
 route('/issues', async (context) => ((await signedIn()) ? issues.everywhere(context) : home(context)));
+route('/pulls', async (context) => ((await signedIn()) ? pulls.everywhere(context) : home(context)));
 // Repository screens: /{owner}/{repo}, then a view and what it needs.
 async function repository({ params }) {
   const context = await load(params);
@@ -53,8 +55,8 @@ async function repository({ params }) {
     case 'labels': return issues.labels(context);
     case 'milestones': return more[0] === 'new' ? issues.milestoneForm(context, null) : more[1] === 'edit' ? issues.milestoneForm(context, more[0]) : issues.milestones(context);
     case 'milestone': return issues.milestone(context, more[0]);
-    case 'pulls': return old.pulls(context);
-    case 'pull': return old.pull(context, more[0]);
+    case 'pulls': return pulls.list(context);
+    case 'pull': return ({ commits: pulls.commits, checks: pulls.checksTab, files: pulls.files }[more[1]] || pulls.conversation)(context, more[0]);
     case 'resolve': return old.resolve(context, decodeURIComponent(rest));
     case 'settings': return old.settings(context);
     default: return notFoundPage();

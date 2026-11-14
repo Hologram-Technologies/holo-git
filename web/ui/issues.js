@@ -122,6 +122,20 @@ export async function create(context) {
   return { title: `${S.issues.new} · ${context.repo.name}`, repo: context.repo };
 }
 
+// Assignees, labels and milestone: the part of the sidebar an issue and a pull request share.
+export function triage(context, state, issue, mine, change) {
+  const toggle = (list, value) => (list.includes(value) ? list.filter((item) => item !== value) : [...list, value]);
+  const milestoneTitle = (id) => (state.milestones.find((m) => m.id === id) || {}).title || '';
+  return [
+    section(S.issues.assignees, menu({ label: S.issues.edit, iconOnly: true, icon: 'gear', kind: 'invisible', size: 'small', align: 'end', items: [{ label: issue.assignees.includes(mine) ? S.issues.unassignMe : S.issues.assignMe, icon: 'person', onclick: change('assignees', toggle(issue.assignees, mine)) }] }),
+      issue.assignees.length ? issue.assignees.map((key) => el('span', { class: 'row' }, avatar(key.slice(0, 7)), key === mine ? S.common.you : key.slice(0, 7))) : el('span', { class: 'muted' }, S.issues.noOne)),
+    section(S.issues.labels, menu({ label: S.issues.edit, iconOnly: true, icon: 'gear', kind: 'invisible', size: 'small', align: 'end', attrs: { 'data-pick': 'labels' }, items: state.labels.size ? [...state.labels.keys()].map((label) => ({ label, icon: issue.labels.includes(label) ? 'check' : 'dot-fill', onclick: change('labels', toggle(issue.labels, label)) })) : [{ heading: S.issues.noLabelsYet }, { label: S.issues.editLabels, href: repoHref(context.repo, 'labels') }] }),
+      issue.labels.length ? issue.labels.map((label) => issueLabel(label, (state.labels.get(label) || {}).color || '')) : el('span', { class: 'muted' }, S.issues.noneYet)),
+    section(S.issues.milestone, menu({ label: S.issues.edit, iconOnly: true, icon: 'gear', kind: 'invisible', size: 'small', align: 'end', attrs: { 'data-pick': 'milestone' }, items: [...state.milestones.filter((m) => m.state === 'open' || m.id === issue.milestone).map((m) => ({ label: m.title, icon: m.id === issue.milestone ? 'check' : 'milestone', onclick: change('milestone', m.id === issue.milestone ? '' : m.id) })),
+      ...(state.milestones.length ? [] : [{ heading: S.issues.noMilestonesYet }, { label: S.issues.newMilestone, href: repoHref(context.repo, 'milestones', 'new') }])] }),
+      issue.milestone ? el('a', { href: repoHref(context.repo, 'milestone', issue.milestone) }, icon('milestone'), ' ', milestoneTitle(issue.milestone)) : el('span', { class: 'muted' }, S.issues.noMilestone))];
+}
+
 // A sidebar section: a heading with a menu that changes the value, and the value below it.
 function section(title, picker, value) {
   return el('div', { class: 'side-section' }, el('div', { class: 'row' }, el('h2', {}, title), el('span', { class: 'spacer' }), picker), el('div', { class: 'row' }, value));
@@ -183,15 +197,7 @@ export async function view(context, number) {
   const composer = commentBox({ render: (text) => (text.trim() ? markdown(context, text) : el('p', { class: 'muted' }, S.parts.nothingToPreview)), onsubmit: async (text) => { if (await attempt(note, () => addComment(repo, issue.id, { body: text, name }))) refresh(); } });
   composer.querySelector('.foot').prepend(issue.state === 'open' ? button({ label: S.issues.close, icon: 'issue-closed', onclick: change('state', 'closed'), attrs: { 'data-close': '' } }) : button({ label: S.issues.reopen, icon: 'issue-reopened', onclick: change('state', 'open'), attrs: { 'data-reopen': '' } }));
 
-  const toggle = (list, value) => (list.includes(value) ? list.filter((item) => item !== value) : [...list, value]);
-  const side = el('aside', { class: 'stack side' },
-    section(S.issues.assignees, menu({ label: S.issues.edit, iconOnly: true, icon: 'gear', kind: 'invisible', size: 'small', align: 'end', items: [{ label: issue.assignees.includes(mine) ? S.issues.unassignMe : S.issues.assignMe, icon: 'person', onclick: change('assignees', toggle(issue.assignees, mine)) }] }),
-      issue.assignees.length ? issue.assignees.map((key) => el('span', { class: 'row' }, avatar(key.slice(0, 7)), key === mine ? S.common.you : key.slice(0, 7))) : el('span', { class: 'muted' }, S.issues.noOne)),
-    section(S.issues.labels, menu({ label: S.issues.edit, iconOnly: true, icon: 'gear', kind: 'invisible', size: 'small', align: 'end', attrs: { 'data-pick': 'labels' }, items: state.labels.size ? [...state.labels.keys()].map((label) => ({ label, icon: issue.labels.includes(label) ? 'check' : 'dot-fill', onclick: change('labels', toggle(issue.labels, label)) })) : [{ heading: S.issues.noLabelsYet }, { label: S.issues.editLabels, href: repoHref(context.repo, 'labels') }] }),
-      issue.labels.length ? issue.labels.map((label) => issueLabel(label, (state.labels.get(label) || {}).color || '')) : el('span', { class: 'muted' }, S.issues.noneYet)),
-    section(S.issues.milestone, menu({ label: S.issues.edit, iconOnly: true, icon: 'gear', kind: 'invisible', size: 'small', align: 'end', attrs: { 'data-pick': 'milestone' }, items: [...state.milestones.filter((m) => m.state === 'open' || m.id === issue.milestone).map((m) => ({ label: m.title, icon: m.id === issue.milestone ? 'check' : 'milestone', onclick: change('milestone', m.id === issue.milestone ? '' : m.id) })),
-      ...(state.milestones.length ? [] : [{ heading: S.issues.noMilestonesYet }, { label: S.issues.newMilestone, href: repoHref(context.repo, 'milestones', 'new') }])] }),
-      issue.milestone ? el('a', { href: repoHref(context.repo, 'milestone', issue.milestone) }, icon('milestone'), ' ', milestoneTitle(issue.milestone)) : el('span', { class: 'muted' }, S.issues.noMilestone)));
+  const side = el('aside', { class: 'stack side' }, triage(context, state, issue, mine, change));
 
   show('wide', repoHeader(context, 'issues'), el('div', { class: 'page stack' }, heading,
     el('div', { class: 'row issue-meta' }, stateBadge(issue.state === 'open' ? 'open' : 'closed'), el('span', { class: 'muted' }, el('strong', {}, who(issue.name, issue.author)), ' ', S.issues.openedThis, ' ', relativeTime(issue.time), ' · ', S.issues.commentCount(issue.comments))),
