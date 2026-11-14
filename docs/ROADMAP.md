@@ -34,18 +34,19 @@ For a change that touches one file out of many, most checks are in the first cat
 
 1. **Protected branches.** Done.
 2. **Thin pull requests.** Done. A pull request is a signed record naming a base and a head. An approval is a signed record bound to the exact tree it approved. The merge gate is one kernel decision: the required approvals and the required checks exist for this tree. Only what checks need to attach to; no discussion threads yet.
-3. **Checks keyed by content.** A check result is a signed record stored under a key derived from the step, the labels of the subtrees it reads, and the toolchain. Before running anything, look the key up. The first workload is this repository:
+3. **Checks keyed by content.** Done, with the gaps listed in the README. A check result is a signed record stored under a key derived from the step, the labels of the subtrees it reads, and the toolchain. Before running anything, look the key up. The first workload is this repository:
    - engine tests, keyed on `engine/`;
    - page tests, keyed on `web/`, `test/` and the two WebAssembly files;
    - Lean verification, keyed per module on the module and what it imports;
    - the kernel build, keyed on `src/` and the build image.
    The executor is a small command run on a contributor's machine, because a browser cannot run a compiler or Lean. It publishes results to the replica; the page reads them.
-4. **Measure.** For this repository's own history, replay the last fifty changes and count the checks that would have run against the checks that did. Publish the number.
-5. **Self-hosting.** Develop this repository through itself, with GitHub as a mirror.
-6. **The rest of collaboration:** issues, review discussion, organisations.
-7. **Identity and privacy:** passkeys, encrypted private repositories, rollback detection.
-8. **Scale and feel:** packs for transfer, large repositories, measured budgets, three browsers.
-9. **Assurance:** proofs carried in the holo, reproducible builds, kappa-registry accepting browser writes.
+4. **Measure.** Done once: over this repository's first 26 commits, 30 check runs with reuse against 78 without, 62 percent avoided. Far from 100 times; the history is short and most commits touched checked code. Measure again on a larger codebase before drawing conclusions.
+5. **Close the soundness gaps in reuse**, because a wrongly reused pass is worse than a slow check: put the toolchain and environment in the key, split checks so that one changed file reruns less, and name trusted runners.
+6. **Self-hosting.** Develop this repository through itself, with GitHub as a mirror.
+7. **The rest of collaboration:** issues, review discussion, organisations.
+8. **Identity and privacy:** passkeys, encrypted private repositories, rollback detection.
+9. **Scale and feel:** packs for transfer, large repositories, measured budgets, three browsers.
+10. **Assurance:** proofs carried in the holo, reproducible builds, kappa-registry accepting browser writes.
 
 Steps 2 to 4 are the product. If step 4's number is small, the plan is wrong and should change.
 

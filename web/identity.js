@@ -2,6 +2,7 @@
 // The key is ECDSA P-256, generated in the browser as non-extractable.
 
 import { fold, GRANTABLE, PUSHERS } from './log.js';
+import { isCheckName } from './checks.js';
 import { statement, sha256, b64, ECDSA, SIGN } from './records.js';
 import { loadKey, saveKey, appendRefUpdate, appendRecord, listRefUpdates } from './store.js';
 
@@ -73,10 +74,11 @@ export async function checkLog(repo) {
 
 // Protect a branch: it can then only move forward, and only for those `minimum` names
 // ('write': anyone with write access; 'admin': the owner alone).
-export async function protect(repo, branch, minimum, approvals = 0) {
+export async function protect(repo, branch, minimum, approvals = 0, checks = []) {
   if (!PUSHERS.includes(minimum)) throw new Error('a protected branch is open to writers or to the owner only');
   if (!Number.isInteger(approvals) || approvals < 0 || approvals > 200) throw new Error('required approvals must be a whole number from 0 to 200');
-  const record = await sign(repo, { type: 'protect', ref: `refs/heads/${branch}`, minimum, approvals });
+  if (!checks.every(isCheckName)) throw new Error('a check name is lower-case letters, digits and hyphens');
+  const record = await sign(repo, { type: 'protect', ref: `refs/heads/${branch}`, minimum, approvals, checks: [...new Set(checks)].sort().join(',') });
   await appendRecord(repo, record);
   return record;
 }
@@ -99,6 +101,13 @@ export async function openPull(repo, branch, head, title) {
 // Approve exactly this commit for this branch. An approval says nothing about any other commit.
 export async function approve(repo, branch, head) {
   const record = await sign(repo, { type: 'approve', ref: `refs/heads/${branch}`, head });
+  await appendRecord(repo, record);
+  return record;
+}
+
+// Publish the result of a check. `action` is the key of what was checked (see checks.js).
+export async function recordCheck(repo, name, action, result) {
+  const record = await sign(repo, { type: 'check', name, action, result });
   await appendRecord(repo, record);
   return record;
 }

@@ -20,11 +20,14 @@ export function statement(r) {
   else if (type === 'revoke') fields = ['holo-git/revoke/1', r.repo, r.subject, String(r.time), r.key, r.previous];
   else if (type === 'protect') {
     // The first form had no approvals count; records signed in it must still verify.
-    fields = r.approvals === undefined ? ['holo-git/protect/1', r.repo, r.ref, r.minimum, String(r.time), r.key, r.previous]
-      : ['holo-git/protect/2', r.repo, r.ref, r.minimum, String(r.approvals), String(r.time), r.key, r.previous];
+    // Earlier forms had no approvals count, then no checks; records signed in them must still verify.
+    if (r.approvals === undefined) fields = ['holo-git/protect/1', r.repo, r.ref, r.minimum, String(r.time), r.key, r.previous];
+    else if (r.checks === undefined) fields = ['holo-git/protect/2', r.repo, r.ref, r.minimum, String(r.approvals), String(r.time), r.key, r.previous];
+    else fields = ['holo-git/protect/3', r.repo, r.ref, r.minimum, String(r.approvals), r.checks, String(r.time), r.key, r.previous];
   } else if (type === 'unprotect') fields = ['holo-git/unprotect/1', r.repo, r.ref, String(r.time), r.key, r.previous];
   else if (type === 'pr') fields = ['holo-git/pull/1', r.repo, r.ref, r.head, r.title, String(r.time), r.key, r.previous];
   else if (type === 'approve') fields = ['holo-git/approve/1', r.repo, r.ref, r.head, String(r.time), r.key, r.previous];
+  else if (type === 'check') fields = ['holo-git/check/1', r.repo, r.name, r.action, r.result, String(r.time), r.key, r.previous];
   else throw new Error('unknown record type');
   if (fields.some((field) => typeof field !== 'string' || /[\n\r]/.test(field))) throw new Error('a record field is missing or contains a line break');
   return utf8.encode(fields.join('\n'));

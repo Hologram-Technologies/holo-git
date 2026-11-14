@@ -10,9 +10,11 @@
 import { decide, gate, MODE } from './kernel.js';
 import { verifyRecord, recordDigest } from './records.js';
 import { isAncestor } from './ancestry.js';
+import { expectedActions } from './evidence.js';
+import { isCheckName } from './checks.js';
 
-const KINDS = { ref: 'change', grant: 'grant', revoke: 'revocation', protect: 'protection', unprotect: 'removal of protection', pr: 'pull request', approve: 'approval' };
-const REQUIRED = { grant: MODE.admin, revoke: MODE.admin, protect: MODE.admin, unprotect: MODE.admin, pr: MODE.read, approve: MODE.write };
+const KINDS = { ref: 'change', grant: 'grant', revoke: 'revocation', protect: 'protection', unprotect: 'removal of protection', pr: 'pull request', approve: 'approval', check: 'check result' };
+const REQUIRED = { grant: MODE.admin, revoke: MODE.admin, protect: MODE.admin, unprotect: MODE.admin, pr: MODE.read, approve: MODE.write, check: MODE.write };
 export const GRANTABLE = ['read', 'write'];
 // Who may move a protected branch: anyone with write access, or only the owner.
 export const PUSHERS = ['write', 'admin'];
@@ -22,7 +24,7 @@ const pullKey = (ref, head) => `${ref}\n${head}`;
 // (before a clone has fetched any objects) such changes are listed in `unverified`, and the
 // caller must fold again, strictly, once the objects are there.
 export async function fold(records, { strict = false } = {}) {
-  const state = { owner: records.length ? records[0].key : null, heads: {}, grants: new Map(), protections: new Map(), pulls: [], digest: '', count: records.length, unverified: [] };
+  const state = { owner: records.length ? records[0].key : null, heads: {}, grants: new Map(), protections: new Map(), pulls: [], checks: new Map(), digest: '', count: records.length, unverified: [] };
   const pulls = new Map();
   // A key's standing at a moment: what it could do if it signed something then.
   const standing = (key, now) => {
@@ -60,8 +62,26 @@ export async function fold(records, { strict = false } = {}) {
       // Approvals count only for this exact commit, from keys that can write now, other than the proposer's.
       const pull = pulls.get(pullKey(record.ref, record.next));
       const approvalsHave = pull ? [...pull.approvals].filter((key) => key !== pull.author && standing(key, now) >= MODE.write).length : 0;
+      // A required check is satisfied by a passing result under the exact key this change needs,
+      // from someone who can write now. The key comes from what the check reads, so a result
+      // made for other content with the same inputs counts, and nothing has to run again.
+      const required = rule ? rule.checks : [];
+      let checksHave = 0;
+      if (required.length) {
+        const expected = await expectedActions(record.old, record.next, required);
+        if (expected === null) {
+          if (strict) throw new Error('refused: cannot work out which checks a protected branch needed');
+          state.unverified.push(record.next);
+          checksHave = required.length;
+        } else {
+          checksHave = expected.filter((action) => {
+            const result = action && state.checks.get(action);
+            return result && result.result === 'pass' && standing(result.by, now) >= MODE.write;
+          }).length;
+        }
+      }
       allowed = gate({ signed, required: rule ? MODE[rule.minimum] : MODE.write, links, now, fastForward, forceAllowed: !rule,
-        approvalsHave, approvalsNeeded: rule ? rule.approvals : 0, checksHave: 0, checksNeeded: 0 });
+        approvalsHave, approvalsNeeded: rule ? rule.approvals : 0, checksHave, checksNeeded: required.length });
     } else allowed = decide({ signed, required: REQUIRED[type], links, now });
     if (!allowed) throw new Error(`refused by the kernel: a ${KINDS[type]} by key ${String(record.key).slice(0, 12)} does not count`);
 
@@ -79,7 +99,9 @@ export async function fold(records, { strict = false } = {}) {
     } else if (type === 'protect') {
       const approvals = Number(record.approvals || 0);
       if (!PUSHERS.includes(record.minimum) || !/^refs\/heads\/\S+$/.test(record.ref) || !Number.isInteger(approvals) || approvals < 0 || approvals > 200) throw new Error('refused: a malformed protection in the log');
-      state.protections.set(record.ref, { minimum: record.minimum, approvals, time: record.time });
+      const checks = record.checks ? String(record.checks).split(',') : [];
+      if (checks.length > 50 || !checks.every(isCheckName) || new Set(checks).size !== checks.length) throw new Error('refused: a malformed protection in the log');
+      state.protections.set(record.ref, { minimum: record.minimum, approvals, checks, time: record.time });
     } else if (type === 'unprotect') state.protections.delete(record.ref);
     else if (type === 'pr') {
       if (!/^refs\/heads\/\S+$/.test(record.ref) || !/^[0-9a-f]{40}$/.test(record.head) || !record.title || record.title.length > 200) throw new Error('refused: a malformed pull request in the log');
@@ -89,10 +111,15 @@ export async function fold(records, { strict = false } = {}) {
         pulls.set(pullKey(record.ref, record.head), pull);
         state.pulls.push(pull);
       }
-    } else {
+    } else if (type === 'approve') {
       const pull = pulls.get(pullKey(record.ref, record.head));
       if (!pull) throw new Error('refused: an approval of no pull request is in the log');
       pull.approvals.add(record.key);
+    } else {
+      if (!isCheckName(record.name) || !/^[0-9a-f]{64}$/.test(record.action) || !['pass', 'fail'].includes(record.result)) throw new Error('refused: a malformed check result in the log');
+      // The latest result under a key stands. An earlier one is still in the log for anyone to see.
+      const earlier = state.checks.get(record.action);
+      state.checks.set(record.action, { name: record.name, result: record.result, by: record.key, time: record.time, changed: Boolean(earlier && earlier.result !== record.result) || Boolean(earlier && earlier.changed) });
     }
     state.digest = await recordDigest(record);
   }

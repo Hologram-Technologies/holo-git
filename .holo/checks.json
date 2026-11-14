@@ -1,0 +1,20 @@
+{
+  "checks": [
+    {
+      "name": "engine",
+      "run": "cargo test --release",
+      "cwd": "engine",
+      "inputs": ["engine"]
+    },
+    {
+      "name": "page",
+      "run": "sh scripts/build-web.sh && npm ci --no-audit --no-fund && npm test",
+      "inputs": ["engine", "web", "test", "scripts", "package.json", "package-lock.json"]
+    },
+    {
+      "name": "model",
+      "run": "npx --yes prism-code@0.8.0 verify --lean --hosted",
+      "inputs": ["src", "lexlean.toml", "language", "lean-toolchain", "lakefile.toml"]
+    }
+  ]
+}

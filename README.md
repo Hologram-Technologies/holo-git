@@ -167,6 +167,41 @@ Limits:
 - Two people pushing at once: the second is told to fetch; see Fetch and merge.
 - The proofs cover the access rules. Assembling the request (reading the log, checking signatures, choosing which grant applies) is page code, tested by hand only.
 
+## Checks keyed by content
+
+A check is named by what it reads, not by when it ran. This is the part of the project aimed at waiting.
+
+- `.holo/checks.json` lists each check: what to run and which paths it reads.
+- A check's action key is a digest of its definition and of the content labels of those paths in one tree. Git already labels every directory by its content, so the key costs nothing to compute.
+- A result is stored under its key. If a result is there, the check does not run. A rebase, a merge of tested content, a revert to something that passed, or a change to a file the check does not read all have a key that is already answered.
+- A protected branch can require checks by name. The merge gate counts a required check as met when a passing result exists under the exact key the proposed change needs, published by someone who can write. The kernel proves that a missing check never merges.
+- The definitions are read from the branch as it stands, never from the proposed change, so a change cannot weaken the check it must pass.
+- A later result under the same key replaces an earlier one, and the key is marked as having differed: that is what a flaky check looks like here.
+
+Three pieces:
+
+- `node scripts/check.mjs run` works in any git checkout and keeps results on disk. It is what this repository's CI now runs.
+- `node scripts/runner.mjs run --replica URL` is a runner for a holo-git replica: it fetches each open pull request, runs only the required checks with no result, and publishes signed results. Anyone with write access can run one, anywhere. There is no queue.
+- The pull request page shows each required check, its key, and whether a result exists.
+
+Measured on this repository:
+
+- Running all three checks from nothing took 250 seconds. Running them again with nothing changed took 1.4 seconds.
+- Replaying the 26 commits to that point with today's definitions: 78 check runs if every check runs on every commit, 30 with reuse. 62 percent avoided, about 2.6 times fewer.
+- That is far from 100 times. This history is short and most of its commits changed code that a check reads. The figure will be higher where changes are small against a large codebase, and it should be measured there, not assumed.
+
+Tested in `test/checks.test.mjs`, eleven tests: the key ignores paths a check does not read; a required check blocks a merge until its result exists; a change touching nothing the check reads merges on the earlier result with nothing run; a failure does not count and a later pass marks the key; a change cannot weaken its own check; a result from someone since revoked stops counting; a check the branch does not define cannot be met; a forged merge without the check is refused by every clone; the runner end to end; and the command in a plain git checkout, including a revert that runs nothing.
+
+What this does not do, and where it can be wrong:
+
+- **Undeclared inputs.** A check that reads a path it did not list can be wrongly reused. Nothing stops a check from reading other files; the definitions here list whole directories to make that unlikely.
+- **The toolchain is not in the key.** A result made with one compiler version is reused under another. The key should include it; today it does not.
+- **The environment is not in the key.** The page check runs four more tests when a real store is configured than when it is not, under the same key.
+- **Nothing isolates a check.** It can use the network, the clock and randomness, so a nondeterministic check is cached as if it were not.
+- **Trust is coarse.** Any key with write access can publish a result. There is no separate list of trusted runners and no requirement that two runners agree.
+- **Checks run whole.** There is no reuse inside a check: one changed test file reruns every test in that check.
+- **Results in CI live in GitHub's cache**, which expires and is not shared with anyone's own machine.
+
 ## Pull requests and the merge gate
 
 A thin first version: only what approvals and checks need to attach to.
@@ -178,7 +213,7 @@ A thin first version: only what approvals and checks need to attach to.
 - An approval counts only if it comes from someone other than the proposer who can still write at the moment of the merge.
 - A pull request's number is its place among pull requests in the signed log, which everyone folds the same way. Numbers need no server.
 
-Proved in the kernel, for any evidence: fewer approvals than required never merges, and fewer checks than required never merges. The checks half is in place for the next step and always sees zero required today. Counting the approvals that qualify is page code; the kernel proves what follows from the count.
+Proved in the kernel, for any evidence: fewer approvals than required never merges, and fewer checks than required never merges. Counting the approvals that qualify is page code; the kernel proves what follows from the count.
 
 Kernel guest: SHA-256 `c61abc2421a4151dfa2a3906caec28ed28a8762b67463074b9aaf264750de625`, from commit `854e248`, run https://github.com/humuhumu33/holo-git/actions/runs/43552793784, holo fingerprint `blake3:6b571f3f916a737b9f929c396d384549132c1996f96212c1c36664b20c9df0d8`, 44 of 44 acceptance vectors. The model has 31 theorems in 16 modules.
 
@@ -207,7 +242,7 @@ The kernel guest now in the page is recorded under Pull requests and the merge g
 
 Tested in `test/protect.test.mjs`, ten tests: only the owner can protect or unprotect; a writer still moves a protected branch forward; a rewind signed by a key with write access and written straight to the store is refused by every clone; the owner cannot rewind either; a merge counts as moving forward; an owner-only branch refuses a writer; removal restores access.
 
-Not done: required checks, which come next; protected tags; patterns such as `release/*`; and deleting a branch, which does not exist at all yet.
+Not done: protected tags; patterns such as `release/*`; and deleting a branch, which does not exist at all yet.
 
 ## Fetch and merge
 
@@ -245,10 +280,10 @@ Tested: the engine's marked output is byte for byte what `git merge-file` prints
 
 ## Automated tests
 
-Every push runs two suites before anything is deployed. A failure stops the deploy.
+Every push runs the checks that have no result for its content before anything is deployed. A failure stops the deploy. The checks are the two suites below and Lean's verification of the model.
 
 - `engine/tests`: fourteen tests of the engine against git (objects, packs, deltas, diff, blame, merge, written objects, packs and bundles).
-- `test/page.test.mjs`, `test/merge.test.mjs`, `test/s3.test.mjs`, `test/protect.test.mjs` and `test/pulls.test.mjs`: forty-eight tests of the page's own modules (four of them against a real S3-compatible store), run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
+- `test/page.test.mjs`, `test/merge.test.mjs`, `test/s3.test.mjs`, `test/protect.test.mjs`, `test/pulls.test.mjs` and `test/checks.test.mjs`: fifty-nine tests of the page's own modules (four of them against a real S3-compatible store), run in Node unchanged. Only browser storage is replaced, by an in-memory IndexedDB, one per "device". They use a real git repository, a static file server as a read-only replica, and the stand-in object store as a writable one.
 
 What the page tests cover: clone matches git object for object; history, changed paths and line counts match `git show --numstat`; blame matches `git blame`; altered stored bytes are refused; a commit made here is pulled and `fsck`ed by git; push sends only what is missing and git accepts what the replica holds; a tampered object, log record or head is refused; grant, use, escalation, revocation and expiry between two devices; a validly signed forgery written straight to the store; a broken chain and a record from another repository.
 

@@ -6,6 +6,7 @@ import { startShell } from './shell.js';
 import { loadKernel, decisions } from './kernel.js';
 import { checkLog, deviceKey, grant, revoke, protect, unprotect, approve } from './identity.js';
 import { isAncestor } from './ancestry.js';
+import { expectedActions } from './evidence.js';
 import { push, setCredentials, hasCredentials } from './replica.js';
 import { fetchFrom, updatePull } from './sync.js';
 import { clone, resolveCommit, readTree, lookup, history, changedPaths, person, fileVersions, commitFile, bundleOf, proposeFile, mergePull } from './git.js';
@@ -320,6 +321,17 @@ async function pullPage(repo, refs, number) {
     sections.push(el('section', { class: 'file' },
       el('h3', {}, el('span', { class: `st ${change.status}` }, change.status), ' ', change.path), await fileDiff(change, forkTree, head.tree)));
   }
+  // Required checks: what this exact change needs, and whether a result for it already exists.
+  const rule = log.state.protections.get(pull.ref);
+  const required = rule ? rule.checks : [];
+  const expected = required.length && !pull.merged ? await expectedActions(baseHead, pull.head, required) : null;
+  const checkRows = expected ? required.map((name, i) => {
+    const result = expected[i] && log.state.checks.get(expected[i]);
+    const state = !expected[i] ? 'not defined on the branch, so it cannot pass'
+      : !result ? 'no result yet for this content'
+        : `${result.result}${result.changed ? ' (results under this key have differed: flaky)' : ''}, published by ${keyName(result.by, mine, log.state.owner)} on ${when(result.time)}`;
+    return el('tr', {}, el('td', {}, name), el('td', { class: result && result.result === 'pass' ? 'st added' : 'st removed' }, state), el('td', { class: 'mono muted' }, expected[i] ? expected[i].slice(0, 12) : ''));
+  }) : [];
   const note = el('span', { class: 'muted' });
   const act = (label, work) => el('button', { onclick: async () => {
     try { await work(); window.dispatchEvent(new HashChangeEvent('hashchange')); } catch (error) { note.textContent = ` ${error.message}`; }
@@ -338,6 +350,8 @@ async function pullPage(repo, refs, number) {
       upToDate ? '' : ` · behind ${branch}: it must be brought up to date before it can merge`),
     el('p', {}, `Approvals that count: ${pull.counted} of ${pull.needed} required.`,
       el('span', { class: 'muted' }, approvers.length ? ` Approved by ${approvers.join('; ')}.` : ' Nobody has approved this commit.')),
+    checkRows.length ? el('table', { class: 'files' }, checkRows) : '',
+    checkRows.length ? el('p', { class: 'muted' }, 'A check is keyed by the content it reads. A result for the same content counts, whichever commit it was made for.') : '',
     el('p', { class: 'push' }, actions, note),
     el('h2', {}, `${changes.length} changed file${changes.length === 1 ? '' : 's'}`), ...sections);
 }
@@ -372,11 +386,12 @@ async function accessTools(repo, log, branch) {
   const who = el('select', { 'aria-label': 'Who may change the protected branch' },
     el('option', { value: 'write' }, 'anyone with write access'), el('option', { value: 'admin' }, 'the owner only'));
   if (rule) who.value = rule.minimum;
+  const wants = el('input', { type: 'text', 'aria-label': 'Checks required to change the branch', placeholder: 'required checks, e.g. engine,page', value: rule ? rule.checks.join(',') : '' });
   const needs = el('input', { type: 'number', min: '0', max: '200', 'aria-label': 'Approvals required to change the branch', value: String(rule ? rule.approvals : 0) });
   const guard = el('p', { class: 'push' },
-    el('span', {}, rule ? `${branch} is protected: it only moves forward, for ${rule.minimum === 'admin' ? 'the owner only' : 'anyone with write access'}, with ${rule.approvals} approval${rule.approvals === 1 ? '' : 's'} required.` : `${branch} is not protected: anyone with write access can rewind it.`),
-    who, el('span', { class: 'muted' }, 'approvals required:'), needs,
-    el('button', { onclick: async () => { try { await protect(repo.name, branch, who.value, Number(needs.value) || 0); rerender(); } catch (error) { note.textContent = ` ${error.message}`; } } }, rule ? 'Change' : 'Protect'),
+    el('span', {}, rule ? `${branch} is protected: it only moves forward, for ${rule.minimum === 'admin' ? 'the owner only' : 'anyone with write access'}, with ${rule.approvals} approval${rule.approvals === 1 ? '' : 's'}${rule.checks.length ? ` and the checks ${rule.checks.join(', ')}` : ''} required.` : `${branch} is not protected: anyone with write access can rewind it.`),
+    who, el('span', { class: 'muted' }, 'approvals required:'), needs, wants,
+    el('button', { onclick: async () => { try { await protect(repo.name, branch, who.value, Number(needs.value) || 0, wants.value.split(',').map((name) => name.trim()).filter(Boolean)); rerender(); } catch (error) { note.textContent = ` ${error.message}`; } } }, rule ? 'Change' : 'Protect'),
     rule ? el('button', { onclick: async () => { try { await unprotect(repo.name, branch); rerender(); } catch (error) { note.textContent = ` ${error.message}`; } } }, 'Remove protection') : '');
   return el('details', { class: 'access' }, el('summary', {}, 'Access'),
     el('p', {}, role), guard, el('p', { class: 'push' }, el('span', { class: 'muted' }, 'This device\'s key:'), mine),

@@ -1,4 +1,4 @@
-# Tests the engine against git, builds it for the browser, and publishes the page
+# Runs the checks that have no result for this content, builds the page, and publishes it
 # with a static replica of this repository beside it, so the page can clone its own source.
 name: pages
 
@@ -24,12 +24,48 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Use a current Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Add the WebAssembly target
         run: rustup target add wasm32-unknown-unknown
-      - name: Test the engine against git
-        working-directory: engine
-        run: cargo test --release
-      - name: Build the engine and the replica
+      # Check results are kept by action key: a digest of a check's definition and of the content
+      # it reads. A check whose key already has a result here does not run again.
+      - name: Bring back earlier check results
+        uses: actions/cache@v4
+        with:
+          path: .holo/results
+          key: holo-results-${{ runner.os }}-${{ github.sha }}
+          restore-keys: holo-results-${{ runner.os }}-
+      - name: See which checks have no result for this content
+        id: need
+        run: |
+          node scripts/check.mjs keys | tee keys.log
+          if grep -q '  page  no result' keys.log; then echo "page=run" >>"$GITHUB_OUTPUT"; fi
+      - name: Start a real S3-compatible store with throwaway keys
+        if: steps.need.outputs.page == 'run'
+        run: |
+          {
+            echo "S3_TEST_ACCESS_KEY=test$(openssl rand -hex 8)"
+            echo "S3_TEST_SECRET_KEY=$(openssl rand -hex 24)"
+            echo "S3_TEST_ENDPOINT=http://127.0.0.1:8333"
+          } >>"$GITHUB_ENV"
+      - name: Wait for the store
+        if: steps.need.outputs.page == 'run'
+        run: sh scripts/dev-s3.sh start
+      - name: Run the checks that have no result
+        run: |
+          node scripts/check.mjs run | tee checks.log
+          {
+            echo '## Checks'
+            echo
+            echo '```'
+            grep -E '^(engine|page|model): |^[0-9]+ checks?:' checks.log
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          exit "${PIPESTATUS[0]}"
+      - name: Build the page
         run: |
           sh scripts/build-web.sh | tee build.log
           {
@@ -41,23 +77,6 @@ jobs:
             grep '^shell:' build.log
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
-      - name: Use a current Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Start a real S3-compatible store with throwaway keys
-        run: |
-          {
-            echo "S3_TEST_ACCESS_KEY=test$(openssl rand -hex 8)"
-            echo "S3_TEST_SECRET_KEY=$(openssl rand -hex 24)"
-            echo "S3_TEST_ENDPOINT=http://127.0.0.1:8333"
-          } >>"$GITHUB_ENV"
-      - name: Wait for the store
-        run: sh scripts/dev-s3.sh start
-      - name: Test the page's own code against git, a stand-in store and the real one
-        run: |
-          npm ci --no-audit --no-fund
-          npm test
       - name: Upload the page
         uses: actions/upload-pages-artifact@v3
         with:
