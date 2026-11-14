@@ -77,7 +77,8 @@ Release is the phase in `prompt.md` where it lands.
 | Feeds | adapted | generated on publish to a static replica | 6 |
 | Live updates | adapted | on sync; push between tabs | 5 |
 | Markdown, diagrams, math, highlighting | full | rendered in a sandbox | 2 |
-| Themes and languages | full | | 5 |
+| Themes | full | | 5 |
+| Languages | adapted | English first; one string file makes others possible | 5 |
 
 ## Identity and access
 
@@ -88,14 +89,16 @@ Release is the phase in `prompt.md` where it lands.
 | External sign-in: LDAP, OAuth, PAM | non-goal | server-side by nature | |
 | OAuth provider | non-goal | needs a token issuer | |
 | Access tokens and scopes | adapted | scoped, time-limited delegations | 1 |
-| SSH and deploy keys | non-goal | tied to SSH | |
+| Sign-in over SSH | non-goal | tied to SSH | |
+| Deploy keys | adapted | a key with read or write access to one repository, held in the access list | 1 |
+| SSH keys for verifying commits | adapted | kept for verifying commits, as GPG keys are | 2 |
 | GPG keys | adapted | kept for verifying commits | 2 |
 | Organisations, teams, per-unit permissions | full | Gitea's resolution order, ported into the kernel | 1 |
 | Collaborators | full | | 1 |
 | Private repositories | adapted | client-side encryption; revocation is forward-only | 6 |
 | Anonymous and public per-unit access | adapted | read access is who holds the key | 6 |
 | Blocking users | adapted | their operations are ignored by those who block | 5 |
-| Audit log | full | the operation log is the audit log | 1 |
+| Audit log | adapted | the operation log is the audit log; it records repository operations, not sign-ins or settings changes | 1 |
 | Admin panel | non-goal | no instance to administer | |
 
 ## Automation and packages
@@ -109,19 +112,20 @@ Release is the phase in `prompt.md` where it lands.
 | Secrets and variables | adapted | released to named executors by delegation | 6 |
 | Scheduled workflows | adapted | need an open tab or an executor | 6 |
 | Container and generic packages | adapted | kappa peers already speak these | 6 |
-| The other 22 package formats | non-goal for now | each is its own protocol endpoint; revisit by demand | |
+| The other 22 package formats | non-goal | each is its own protocol endpoint; one that is wanted becomes its own adapted row | |
 | REST API in Gitea's shape | adapted | answered by the service worker for the page and local tools; remote callers need a peer | 5 |
 | Agent interface | added | typed API and MCP server with the same rules | 5 |
 | Federation endpoints | non-goal | replaced by replication | |
 
 ## Summary
 
-Full: about 45 rows. Adapted: about 40. Non-goal: 11. Added: 2.
+Counted 2026-11-14, with the rows of the re-verification section below: 125 rows. Full: 43. Adapted: 64. Non-goal (cannot exist without a server): 16. Added: 2.
 "Feature complete" as written cannot include the non-goals without a server. I recommend defining it as every row above delivered at its stated status.
 
 ## Re-verification, 2026-11-14
 
-Phase 0 of `docs/PROMPT-UI.md`. Nothing above this heading was changed.
+Phase 0 of `docs/PROMPT-UI.md`.
+**Approved by the user on 2026-11-14:** all 42 added rows, including the six that cannot exist, and the four status changes. The four changes are now applied in the tables above; the words "proposed" and "not applied" below record how the section was written.
 Checked against go-gitea/gitea at `eaa4fe918d6f296d4280f5f571686eb9f00a8bd8` (the commit `STUDY.md` used; committed 2026-11-13).
 Read in full: `routers/web/web.go` (1,795 lines, 651 route registrations) and `models/unit/unit.go`. Read by listing: `templates/` (593 files) and the template names declared in `routers/web/`.
 `options/locale/locale_en-US.ini` does not exist at this commit; the strings are in `options/locale/locale_en-US.json` (4,053 keys). It was used to confirm names, not walked key by key.
@@ -207,6 +211,6 @@ Not applied. Each needs a decision.
 
 ### Counts
 
-The table above this section holds 80 rows: 30 full, 38 adapted, 9 non-goal, 1 non-goal for now, 2 added. Its summary says "about 45" full and 11 non-goals.
+Before the approved changes were applied, the table above this section held 80 rows: 30 full, 38 adapted, 9 non-goal, 1 non-goal for now, 2 added. Its summary says "about 45" full and 11 non-goals.
 `docs/PROMPT-UI.md` says "the eleven such features". The table lists ten.
 With every proposal in this section accepted there would be 125 rows (two existing rows split): 43 full, 64 adapted, 16 cannot exist, 2 added. The "What is different" page would then name sixteen things, not eleven.
