@@ -90,10 +90,11 @@ export async function unprotect(repo, branch) {
 }
 
 // Propose a commit for a branch. Anyone with read access can; it changes nothing by itself.
-export async function openPull(repo, branch, head, title) {
+// `follows` names the commit this one replaces, when the author updates a pull request they already opened.
+export async function openPull(repo, branch, head, title, { follows = '', body = '', name = '' } = {}) {
   title = title.replace(/[\n\r]/g, ' ').trim().slice(0, 200);
   if (!title) throw new Error('a pull request needs a title');
-  const record = await sign(repo, { type: 'pr', ref: `refs/heads/${branch}`, head, title });
+  const record = await sign(repo, { type: 'pr', ref: `refs/heads/${branch}`, head, title, follows, body: String(body), name: String(name), at: Date.now() });
   await appendRecord(repo, record);
   return record;
 }
@@ -146,3 +147,15 @@ export async function saveMilestone(repo, { id, title, description = '', due = '
   await add(repo, { type: 'milestone', id: milestone, title, description: String(description).slice(0, 2000), due, state });
   return milestone;
 }
+
+// Pull request discussion. A pull request is commented on, labelled and closed with the same records as an issue, named by its identifier.
+// verdict: comment, approve or changes. An approval is for exactly the commit named.
+export const review = (repo, pull, head, verdict, { body = '', name = '' } = {}) => add(repo, { type: 'review', pull, head, verdict, body: String(body), name: String(name), at: Date.now() });
+// A comment on one line of one side of a change, or, with `reply`, an answer in a conversation already started.
+export async function commentOnLine(repo, pull, { head = '', path = '', side = 'new', line = 0, reply = '', body, name = '' }) {
+  if (!String(body).trim()) throw new Error('a comment needs some text');
+  const id = freshId();
+  await add(repo, { type: 'line-comment', id, pull, head, path, side, line, reply, body: String(body), name: String(name), at: Date.now() });
+  return id;
+}
+export const resolveThread = (repo, thread, resolved, name = '') => add(repo, { type: 'resolve', thread, resolved: resolved ? '1' : '0', name: String(name), at: Date.now() });

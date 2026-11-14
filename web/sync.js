@@ -203,6 +203,7 @@ export async function updatePull({ repo, refs, branch, head, title, who = {} }) 
   const commit = makeCommit({ tree: merged, parents: [head, baseHead], author: line, committer: line, message: `Bring up to date with ${branch}\n` });
   context.made.push(commit);
   await putObjects(context.made);
-  await openPull(repo.name, branch, commit.id, title);
+  // The same pull request, moved to the new commit: it keeps its number and its discussion.
+  await openPull(repo.name, branch, commit.id, title, { follows: head, name: who.name || '' });
   return { id: commit.id };
 }

@@ -29,7 +29,12 @@ export function statement(r) {
     else if (r.checks === undefined) fields = ['holo-git/protect/2', r.repo, r.ref, r.minimum, String(r.approvals), String(r.time), r.key, r.previous];
     else fields = ['holo-git/protect/3', r.repo, r.ref, r.minimum, String(r.approvals), r.checks, String(r.time), r.key, r.previous];
   } else if (type === 'unprotect') fields = ['holo-git/unprotect/1', r.repo, r.ref, String(r.time), r.key, r.previous];
+  // The second form of a pull request adds a description, the proposer's name, and `follows`: the commit this one replaces when a pull request is updated.
+  else if (type === 'pr' && r.follows !== undefined) fields = ['holo-git/pull/2', r.repo, r.ref, r.head, r.title, r.follows, J(r.body), r.name, String(r.at), String(r.time), r.key, r.previous];
   else if (type === 'pr') fields = ['holo-git/pull/1', r.repo, r.ref, r.head, r.title, String(r.time), r.key, r.previous];
+  else if (type === 'review') fields = ['holo-git/review/1', r.repo, r.pull, r.head, r.verdict, J(r.body), r.name, String(r.at), String(r.time), r.key, r.previous];
+  else if (type === 'line-comment') fields = ['holo-git/line-comment/1', r.repo, r.id, r.pull, r.head, J(r.path), r.side, String(r.line), r.reply, J(r.body), r.name, String(r.at), String(r.time), r.key, r.previous];
+  else if (type === 'resolve') fields = ['holo-git/resolve/1', r.repo, r.thread, r.resolved, r.name, String(r.at), String(r.time), r.key, r.previous];
   else if (type === 'approve') fields = ['holo-git/approve/1', r.repo, r.ref, r.head, String(r.time), r.key, r.previous];
   else if (type === 'check') fields = ['holo-git/check/1', r.repo, r.name, r.action, r.result, String(r.time), r.key, r.previous];
   // An issue is named by an identifier chosen when it is written, not by its number: the number is its place

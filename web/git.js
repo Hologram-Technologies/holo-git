@@ -276,7 +276,7 @@ export async function proposeFile({ repo, refs, branch, path, content, message, 
   const commit = makeCommit({ tree, parents: [old], author: who, committer: who, message: `${message.trim()}\n` });
   made.push(commit);
   await putObjects(made);
-  await openPull(repo.name, branch, commit.id, message.trim().split('\n')[0]);
+  await openPull(repo.name, branch, commit.id, message.trim().split('\n')[0], { body: message.trim().split('\n').slice(1).join('\n').trim(), name });
   return { id: commit.id };
 }
 

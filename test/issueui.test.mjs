@@ -149,7 +149,8 @@ test('labels and milestones: made, put on an issue, counted, and removed; bad na
   await page.click('.side-section button', S.issues.assignMe);
   await page.waitFor(`document.querySelector('.side-section').textContent.includes(${JSON.stringify(S.common.you)})`, 'the assignee');
 
-  await page.click('.side-section a', 'v1.0');
+  // Followed without the pointer: the sidebar has just been redrawn, and a pointer aimed at where the link was can miss it.
+  await page.eval("[...document.querySelectorAll('.side-section a')].find((a) => a.textContent.trim() === 'v1.0').click()");
   await page.waitFor(`/\\/milestone\\/[0-9a-f]{32}$/.test(document.documentElement.dataset.screen || '')`, 'the milestone');
   assert.deepEqual(await page.eval("[...document.querySelectorAll('.box-row a.title')].map((a) => a.textContent)"), ['Formatting drops leading zeros']);
   await go(page, `${REPO}/issues/1`);

@@ -169,8 +169,10 @@ test('a fresh clone reaches the same numbers and states, and git accepts the rep
   await gitjs.clone(url);
   const all = (await state()).pulls;
   assert.deepEqual(all.map((p) => p.number), all.map((_, i) => i + 1));
-  assert.deepEqual(all.map((p) => p.merged), [true, true, false, true, true, true, false]);
+  // Six, not seven: bringing Bob's pull request up to date moved it to a new commit, and it stayed the same pull request, which was then merged.
+  assert.deepEqual(all.map((p) => p.merged), [true, true, true, true, true, false]);
   assert.equal(all[2].title, 'Bob proposes more');
+  assert.equal(all[2].events.filter((event) => event.kind === 'head').length, 1, 'its one update is in its history');
   const rebuilt = replicaToGit(join(replica.dir, 'review'));
   git(rebuilt.target, 'fsck', '--strict');
   assert.equal(git(rebuilt.target, 'rev-parse', 'main'), await head());
