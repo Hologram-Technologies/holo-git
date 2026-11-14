@@ -45,7 +45,7 @@ Proposed additions. These words are not on the banned list but appear in the cur
 
 | Today | Proposed | Why |
 |---|---|---|
-| device ("this device", "on this device") | "this browser", or "you" | The prompt's table already maps "device key"; the bare word is used 14 times. |
+| device ("this device", "on this device") | "this browser", or "you" | The prompt's table already maps "device key"; the bare word is on 17 lines of web/app.js. |
 | object, objects (counts in status lines) | nothing; drop the count | A git-host user counts commits and files. |
 | `sha1:` and `sha256:` prefixes on identifiers | the bare short identifier, 7 characters, with a copy button | The prefix is the content-address form. |
 | pinned, pinning (of the page) | "Version" and "Integrity value" in the About dialog | Only place the prompt allows it. |
