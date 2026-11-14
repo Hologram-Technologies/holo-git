@@ -269,6 +269,41 @@ What to know before relying on it:
 - **The key is a file** (default `~/.holo-git/key.json`). Whoever has it can sign as that machine.
 - **Nothing here has run against a durable public store.** It is tested against the stand-in store only.
 
+## Hear about a failure before the push, not an hour after
+
+Measured on a larger project: the commonest failed run waited about an hour to report a check that fails in two minutes. Two things here attack that.
+
+**Order.** Results that are already known are reported first. The checks that must run go cheapest and likeliest to fail first, judged from the results kept on the machine. With `--fail-fast` the first failure ends the run:
+
+```bash
+node scripts/check.mjs run --fail-fast
+```
+
+**A push that fails a check does not leave the machine.**
+
+```bash
+node scripts/check.mjs hook install
+```
+
+This writes a `pre-push` hook. On `git push` it checks each commit being pushed, not only the one checked out, stops at the first failure and refuses the push. A commit that was already checked costs nothing. With a store named, the results it makes are the ones CI then reads, so a push that goes through arrives already checked. Name the store once per checkout:
+
+```bash
+git config holo.store https://store.example/results-bucket
+```
+
+```bash
+git config holo.signersRef origin/main
+```
+
+What to know:
+
+- **It is a courtesy, not a gate.** `git push --no-verify` skips it, and a machine without the hook never runs it. What decides a merge is still the required check on the protected branch.
+- **The first push of new work takes as long as its checks take.** That time is spent once, where the author can act on it, instead of in a queue.
+- **A check this machine cannot run is skipped, not failed**, so a push is not blocked by a missing tool. CI still runs it.
+- **The order is a guess from past results on this machine.** With none, checks run as defined. A check that has never failed here is assumed unlikely to, not certain.
+- **An existing `pre-push` hook is never replaced.** Call `check.mjs prepush "$@"` from it instead.
+- `--commit REV` checks any commit without checking it out.
+
 ## Self-hosting: what has been done, and what has not
 
 On 2026-11-14 this repository was developed through itself for three changes, on one machine.

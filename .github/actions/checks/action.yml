@@ -19,6 +19,9 @@ inputs:
   cache:
     description: "'false' when an earlier step in the same job already restored the results."
     default: 'true'
+  fail-fast:
+    description: "'true' stops at the first failing check. The checks left are listed as not run."
+    default: 'false'
   store:
     description: Address of a shared store of signed results. Empty means results stay in this repository's cache.
     default: ''
@@ -58,12 +61,14 @@ runs:
       env:
         HOLO_CHECKS: ${{ inputs.checks }}
         HOLO_STRICT: ${{ inputs.strict }}
+        HOLO_FAIL_FAST: ${{ inputs.fail-fast }}
         HOLO_STORE: ${{ inputs.store }}
         HOLO_SIGNERS_REF: ${{ inputs.signers-ref }}
       run: |
         set -o pipefail
         flags=''
         if [ "$HOLO_STRICT" = 'true' ]; then flags='--strict'; fi
+        if [ "$HOLO_FAIL_FAST" = 'true' ]; then flags="$flags --fail-fast"; fi
         # The status must be taken here: a later command would replace it.
         status=0
         # shellcheck disable=SC2086
@@ -72,7 +77,7 @@ runs:
           echo '## Checks'
           echo
           echo '```'
-          grep -E '^[a-z0-9][a-z0-9-]*: (pass|fail|cannot|not defined|running|note)|^[0-9]+ checks?:' "$RUNNER_TEMP/holo-checks.log" || true
+          grep -E '^[a-z0-9][a-z0-9-]*: (pass|fail|cannot|not defined|running|note)|^[0-9]+ checks?:|^not run after' "$RUNNER_TEMP/holo-checks.log" || true
           echo '```'
         } >>"$GITHUB_STEP_SUMMARY"
         exit "$status"
