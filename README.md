@@ -307,7 +307,9 @@ What to know:
 
 ## Key a check by what it consumes, not by where its sources live
 
-A test that runs a compiled program depends on the program, not on the compiler's source. Keyed by source, every compiler change runs every test. Keyed by the product, a change that leaves the product byte for byte the same runs the build and nothing after it. On the larger project measured in the roadmap this was the difference between 1,316 runs and 70.
+A test that runs a compiled program depends on the program, not on the compiler's source. Keyed by source, every compiler change runs every test. Keyed by the product, a change that leaves the product byte for byte the same runs the build and nothing after it.
+
+**Check first that the result really depends only on the product.** On the larger project measured in `docs/BENCHMARK.md` it did not: the verified output carried the compiler's identity, so the same product gave a different result on every run. A key that leaves out something the result depends on reuses wrongly.
 
 **When the product is committed**, nothing new is needed: name it as an input. One check confirms the committed product is what the sources produce; the expensive check reads only the product.
 

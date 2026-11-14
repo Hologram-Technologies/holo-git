@@ -54,3 +54,34 @@ Left out: the toolchain install steps, and a hardware-instruction probe that one
 ## A fault this found
 
 The third commit first failed here with a compile error its CI did not have. The check's directory was being refilled with each file stamped with its commit's time, and cargo, which rebuilds by comparing times, kept a stale build. Fixed in `0011f1c`, with a test that fails on the old code. The table above is from after the fix. Two earlier attempts were discarded: one tested the pull requests' own commits, not the merges CI tested; one left out the freshness step where most failures happen.
+
+## Second question: would keying by the product spare the example and Atlas runs?
+
+LexLean commits each example's generated Lean. An earlier replay showed that product rarely changes, and I claimed that keying the Lean verification by it would avoid about 95 percent of example runs. This section tests the premise that claim rests on: **the same product gives the same verified result.**
+
+### What was used
+
+No local runs. CI already prints, for every example on every run, how long it took and a digest of its verified output. Those lines were read from the six most recent successful examples jobs whose logs were still available (a seventh could not be fetched). For each run's merge commit, git's identifier of each example's generated Lean, its Lean version file and its pinned Lean packages was computed. That triple is "the product".
+
+### Result
+
+| | |
+|---|---|
+| Runs | 6, each on a different compiler source tree |
+| Examples compared | 24 with more than one run |
+| Examples whose product was identical in every run | 11 |
+| Examples whose verified digest was identical in any two runs | 0 |
+
+Every example's verified digest differed in every run, including the eleven whose product never changed. **The premise is false for LexLean as built.** The verified output is a function of the product and of something else that changed in every run. The compiler's source differed in all six, and the project's own notes say a compiler identity is computed from committed language data, so that identity is the likely cause. I did not confirm it, and with no two runs sharing a compiler I cannot rule out other causes.
+
+### What follows
+
+- **Keying the whole verification by the product would reuse wrongly.** The recorded result would not be the one a fresh run produces.
+- **There is nothing to run it with either.** LexLean's command for an example formats, locks, checks, builds and verifies in one process. No entry point verifies an existing product.
+- **The repeated work is real, but it is inside the verifier.** Lean elaborating an unchanged module with an unchanged Lean is the same work each time. Sparing it means the verifier keeping elaboration results by module content, then stamping the current compiler's identity on its output. That is a change to LexLean, for its maintainers, and its specification currently forbids carrying anything between runs.
+- **Size of the prize, from CI's records:** the examples took 4,060 seconds a run on average across these six, the largest being `bootstrap` at about 31 minutes a run. If results were reusable by product, 59 percent of that would have been spared across the six runs. That figure is arithmetic on a premise now shown false; it is recorded as the upper bound a verifier-level cache could approach, not as a result.
+
+### What was not done
+
+- The Atlas shards were not run. They need more memory and disk than this machine can give safely, and the premise they would have tested failed on the cheaper data.
+- Whether pass or fail, as opposed to the output bytes, is determined by the product alone was not tested. Every run in the sample passed.
