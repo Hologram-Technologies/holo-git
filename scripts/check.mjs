@@ -57,7 +57,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { homedir, tmpdir } from 'node:os';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { actionKey, parseChecks, CHECKS_PATH } from '../web/checks.js';
@@ -104,27 +104,74 @@ function definitionsAt(commit) {
 const stored = (key) => (existsSync(join(results, `${key}.json`)) ? JSON.parse(readFileSync(join(results, `${key}.json`), 'utf8')) : null);
 
 // A directory holding exactly the check's inputs as committed, plus whatever it was allowed to keep.
+//
+// Build tools decide what to rebuild from file times. So a file whose content is the same as at
+// the last run here is left untouched, with the time it had, and a file that changed or is new
+// is written with the time of writing. Restoring each commit's own times instead would make a
+// changed source look older than the last build, and a kept build directory would then hold a
+// stale product for the check to judge.
 function prepare(definition, commit) {
   const directory = join(work, definition.name);
-  mkdirSync(directory, { recursive: true });
-  const kept = new Set(definition.keep);
-  const clear = (relative) => {
-    for (const name of readdirSync(join(directory, relative))) {
-      const path = relative ? `${relative}/${name}` : name;
-      if (kept.has(path)) continue;
-      if ([...kept].some((keep) => keep.startsWith(`${path}/`))) clear(path);
-      else rmSync(join(directory, path), { recursive: true, force: true });
-    }
-  };
-  clear('');
+  const record = join(work, `${definition.name}.files.json`);
+  const isKept = (path) => definition.keep.some((keep) => path === keep || path.startsWith(`${keep}/`));
+  const holdsKept = (path) => definition.keep.some((keep) => keep.startsWith(`${path}/`));
+  const there = (path) => { try { lstatSync(join(directory, path)); return true; } catch { return false; } };
   const present = definition.inputs.filter((path) => git('ls-tree', commit, '--', path));
+
+  // Every file the check reads at this commit, with git's identifier for its content.
+  const now = new Map();
   if (present.length) {
-    // The archive is named by a relative path: some tar programs read a drive letter as a host name.
+    for (const entry of git('ls-tree', '-r', '-z', commit, '--', ...present).split('\0')) {
+      if (!entry) continue;
+      const [meta, path] = entry.split('\t');
+      if (!meta.startsWith('160000')) now.set(path, meta); // another repository's commit is not a file
+    }
+  }
+  // What was put here last time. Without that record nothing here can be trusted, kept directories included.
+  let before = new Map();
+  if (existsSync(directory) && existsSync(record)) {
+    try { before = new Map(JSON.parse(readFileSync(record, 'utf8'))); } catch { before = new Map(); }
+  }
+  if (!before.size) rmSync(directory, { recursive: true, force: true });
+  rmSync(record, { force: true });
+  mkdirSync(directory, { recursive: true });
+  const same = (path) => now.has(path) && before.get(path) === now.get(path);
+
+  // Remove everything that is neither kept nor an input unchanged since last time.
+  const sweep = (relative) => {
+    let left = 0;
+    for (const item of readdirSync(join(directory, relative), { withFileTypes: true })) {
+      const path = relative ? `${relative}/${item.name}` : item.name;
+      if (isKept(path)) { left += 1; continue; }
+      if (item.isDirectory()) {
+        if (sweep(path) || holdsKept(path)) left += 1;
+        else rmSync(join(directory, path), { recursive: true, force: true });
+      } else if (same(path)) left += 1;
+      else rmSync(join(directory, path), { force: true });
+    }
+    return left;
+  };
+  sweep('');
+
+  const wanted = [...now.keys()].filter((path) => !(same(path) && there(path)));
+  if (wanted.length) {
+    // Unpack beside the directory, then move in only what changed. The archive and the staging
+    // directory are named by relative paths: some tar programs read a drive letter as a host name.
     const archive = `${definition.name}.tar`;
-    execFileSync('git', ['archive', '--format=tar', '-o', join(work, archive), commit, '--', ...present], { cwd: top });
-    execFileSync('tar', ['-xf', `../${archive}`], { cwd: directory });
+    const stage = join(work, `${definition.name}.stage`);
+    rmSync(stage, { recursive: true, force: true });
+    mkdirSync(stage, { recursive: true });
+    execFileSync('git', ['archive', '--format=tar', '-o', join(work, archive), commit, '--', ...(wanted.length <= 200 ? wanted : present)], { cwd: top });
+    execFileSync('tar', ['-xmf', `../${archive}`], { cwd: stage });
+    for (const path of wanted) {
+      mkdirSync(dirname(join(directory, path)), { recursive: true });
+      rmSync(join(directory, path), { recursive: true, force: true });
+      renameSync(join(stage, path), join(directory, path));
+    }
+    rmSync(stage, { recursive: true, force: true });
     rmSync(join(work, archive), { force: true });
   }
+  writeFileSync(record, JSON.stringify([...now]));
   return directory;
 }
 
@@ -177,7 +224,7 @@ async function place(share, producer, digest, directory, consumer) {
     const kinds = tar('-tvf', `../${archive}`).split('\n').filter(Boolean).map((line) => line[0]);
     const inside = (name) => !name.startsWith('/') && !name.includes('\\') && !name.split('/').includes('..') && producer.outputs.some((path) => name === path || name.startsWith(`${path}/`));
     if (names.every(inside) && kinds.every((kind) => kind === '-' || kind === 'd')) {
-      tar('-xf', `../${archive}`);
+      tar('-xmf', `../${archive}`);
       good = digestOutputs(directory, producer.outputs) === digest;
     }
   } catch { good = false; }

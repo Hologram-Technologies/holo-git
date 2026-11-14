@@ -227,7 +227,7 @@ function checkout(name, checks, files) {
   for (const [path, text] of Object.entries(files)) write(path, text);
   commit('first');
   return {
-    dir, write, commit,
+    dir, side, write, commit,
     run: (args = [], extra = {}) => spawnSync(process.execPath, [join(root, 'scripts', 'check.mjs'), ...args], { cwd: dir, env: { ...env, ...extra }, encoding: 'utf8' }),
     runs: () => (existsSync(count) ? readFileSync(count, 'utf8').length : 0),
   };
@@ -376,4 +376,40 @@ test('the keys listing keeps the shape the GitHub action reads', () => {
   repo.run(['run']);
   rows = repo.run(['keys']).stdout.trim().split('\n').map((row) => row.match(line));
   assert.deepEqual(rows.map((row) => row && [row[1], row[2]]), [['first', 'pass'], ['second-one', 'fail']]);
+});
+
+test('a kept build directory never holds a product older than the source it was built from', () => {
+  // A build that works as make and cargo do: it rebuilds only when the source is newer than the
+  // product. Every commit in these tests carries the same date, as rebased or cherry-picked commits can.
+  const BUILD = `const fs = require('fs');
+const stale = !fs.existsSync('build/out.txt') || fs.statSync('src/in.txt').mtimeMs > fs.statSync('build/out.txt').mtimeMs;
+if (stale) { fs.mkdirSync('build', { recursive: true }); fs.copyFileSync('src/in.txt', 'build/out.txt'); fs.appendFileSync('build/log.txt', 'b'); }
+process.exit(fs.readFileSync('build/out.txt', 'utf8') === fs.readFileSync('src/in.txt', 'utf8') ? 0 : 1);
+`;
+  const repo = checkout('times', [{ name: 'built', run: 'node tools/build.js', inputs: ['src', 'tools'], keep: ['build'] }],
+    { 'tools/build.js': BUILD, 'src/in.txt': 'one\n', 'src/other.txt': 'unrelated\n' });
+  const work = join(repo.dir, '..');
+  const built = () => readFileSync(join(repo.side, 'work', 'built', 'build', 'log.txt'), 'utf8');
+  assert.equal(repo.run(['run']).status, 0);
+  assert.equal(built(), 'b');
+
+  repo.write('src/in.txt', 'two\n');
+  repo.commit('change the source');
+  let out = repo.run(['run']);
+  assert.equal(out.status, 0, `the product was rebuilt from the changed source\n${out.stdout}${out.stderr}`);
+  assert.equal(built(), 'bb');
+
+  // A change to a file the build does not look at leaves the product alone: unchanged files keep their times.
+  repo.write('src/other.txt', 'unrelated, edited\n');
+  repo.commit('change something else');
+  out = repo.run(['run']);
+  assert.equal(out.status, 0, out.stdout + out.stderr);
+  assert.equal(built(), 'bb', 'nothing was rebuilt');
+
+  // Going back to older content rebuilds too.
+  git(repo.dir, 'revert', '--no-edit', 'HEAD~1');
+  out = repo.run(['run', '--all']);
+  assert.equal(out.status, 0, out.stdout + out.stderr);
+  assert.equal(built(), 'bbb');
+  assert.ok(work);
 });
