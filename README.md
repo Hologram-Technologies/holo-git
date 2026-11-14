@@ -1,6 +1,8 @@
 # holo-git
 
 A serverless code-hosting application that runs entirely in the browser, built as a Prism application.
+
+Live page: https://humuhumu33.github.io/holo-git/ . Press Clone and it clones this repository from a static replica published beside it.
 Gitea is the reference for features. LexLean specifies the rules and Lean proves them. Storage is content-addressed with kappa labels.
 
 Status: Phase 1 complete, with the gaps listed below. Phase 2 has its first slice: clone and browse in the browser. The holo builds on GitHub Actions and replays 16 of 16 acceptance vectors. It rates P0: it does not yet carry provenance, proof or replay statements inside it.
