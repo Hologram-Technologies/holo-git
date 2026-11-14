@@ -3,7 +3,7 @@
 A serverless code-hosting application that runs entirely in the browser, built as a Prism application.
 Gitea is the reference for features. LexLean specifies the rules and Lean proves them. Storage is content-addressed with kappa labels.
 
-Status: Phase 1 complete, with the gaps listed below. The holo builds on GitHub Actions and replays 16 of 16 acceptance vectors. It rates P0: it does not yet carry provenance, proof or replay statements inside it.
+Status: Phase 1 complete, with the gaps listed below. Phase 2 has its first slice: clone and browse in the browser. The holo builds on GitHub Actions and replays 16 of 16 acceptance vectors. It rates P0: it does not yet carry provenance, proof or replay statements inside it.
 
 ## What is proved today
 
@@ -32,6 +32,28 @@ npx prism-code@latest build --remote github
 ```
 
 On the development machine the full local build timed out and then took the container host down, so it is not the supported path yet.
+
+## The browser read path
+
+`engine/` is the git engine in Rust: object hashing, packfile reading, delta resolution, commit and tree parsing. It compiles to 67 KB of WebAssembly with no imports. `web/` is the page.
+
+What works, tested in a browser:
+
+- Clone from any static replica that serves a bare repository as files. No server-side git.
+- Every object's identifier is computed from its bytes; nothing is taken from the replica's index.
+- Objects are stored on the device under kappa labels (`sha1:<id>`) as loose-object bytes, the form a kappa peer stores.
+- Every read re-derives the label. Altered bytes are refused.
+- Browse files, view a file, list history, and see which paths a commit changed.
+
+What is tested: five engine tests compare every object in a real packfile with `git cat-file`, byte for byte, and check that damaged packs are refused. The page was exercised by hand against a replica of this repository (120 objects, matching git's count).
+
+Not done yet: line diffs, blame, markdown rendering, a service worker, partial clone, and large repositories (a pack is held in memory whole). The page does not yet call the proved kernel; label checks run in the engine. Storage is IndexedDB, not the file store the architecture proposes.
+
+```bash
+(cd engine && cargo test --release)
+sh scripts/build-web.sh
+python -m http.server 8731 --directory web
+```
 
 ## Read next
 
