@@ -40,7 +40,22 @@ export const S = {
     title: 'Repositories', filter: 'Find a repository', new: 'New', open: 'Open by address',
     empty: 'You have no repositories yet.', emptyAction: 'Create a repository', noMatch: 'No repositories match your search.',
     updated: (when) => `Updated ${when}`, local: 'Only in this browser',
+    dashboard: 'Home', activity: 'Recent activity', noActivity: 'Nothing has happened yet. Commits, issues and pull requests will show up here.',
+    contributions: (n) => `${n} ${n === 1 ? 'contribution' : 'contributions'} in the last year`, in: 'in', tabs: { all: 'All', sources: 'Sources', collaborative: 'Collaborative' },
+    pushed: (branch) => `pushed to ${branch}`, merged: (n) => `merged pull request #${n}`, openedIssue: (n) => `opened issue #${n}`, openedPull: (n) => `opened pull request #${n}`,
+    commented: (n) => `commented on #${n}`, closed: (n) => `closed #${n}`, reopened: (n) => `reopened #${n}`, approved: (n) => `approved #${n}`, requestedChanges: (n) => `requested changes on #${n}`, reviewed: (n) => `reviewed #${n}`,
   },
+  profile: { unknown: 'This browser knows nobody by that name.', noRepos: 'No repositories yet.', edit: 'Edit profile', overview: 'Overview', tabs: 'Profile' },
+  explore: {
+    users: 'Users', empty: 'There is nothing to explore yet.', noMatch: 'Nothing matches your search.', repoCount: (n) => `${n} ${n === 1 ? 'repository' : 'repositories'}`,
+    scope: 'Explore and search cover the repositories this browser holds. Open more by address to see them here.',
+  },
+  notifications: {
+    unread: 'Unread', all: 'All', markAll: 'Mark all as read', done: 'Mark as read', caughtUp: 'You are all caught up.', none: 'No notifications yet.',
+    commented: 'commented', reviewed: 'reviewed', approved: 'approved', requestedChanges: 'requested changes', closed: 'closed this', reopened: 'reopened this', assigned: 'assigned you', updated: 'made a change',
+  },
+  search: { kinds: 'Kinds of result', prompt: 'Search repositories, issues and pull requests.', scope: 'Search covers the repositories this browser holds. To search code, use the search box on a repository.', results: (n) => `${n} ${n === 1 ? 'result' : 'results'}`, none: (q) => `Nothing matches "${q}".` },
+  palette: { title: 'Command palette', placeholder: 'Type to go somewhere or do something', none: 'No matching commands', theme: (name) => `Switch theme: ${name}`, open: 'Open the command palette' },
   welcome: {
     title: 'Welcome', steps: ['Your name', 'Sign-in key', 'First repository'], progress: 'Set-up steps',
     nameTitle: 'Choose a name', nameLead: 'This is how your commits and comments are signed.',

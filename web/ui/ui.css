@@ -394,3 +394,26 @@ h2.day { display: flex; align-items: center; gap: var(--base-size-8); color: var
 .viewed { font-size: var(--text-body-size-small); font-weight: var(--base-text-weight-normal); gap: var(--base-size-4); margin-left: var(--base-size-8); cursor: pointer; }
 .narrow-only { display: none; }
 @media (max-width: 34rem) { .app-header nav { display: none; } .menu-list li.narrow-only { display: block; } }
+
+/* Home */
+.columns.dashboard { grid-template-columns: minmax(0, 1fr) var(--overlay-width-medium); align-items: start; }
+@media (max-width: 63.25rem) { .columns.dashboard { grid-template-columns: minmax(0, 1fr); } }
+.feed-row { align-items: flex-start; }
+.feed-detail { display: block; margin-top: var(--base-size-4); color: var(--fgColor-default); overflow-wrap: anywhere; }
+.feed-detail svg { color: var(--fgColor-muted); }
+.heat-scroll { overflow-x: auto; }
+.repo-list .box-row { padding-left: 0; padding-right: 0; }
+.profile { display: grid; grid-template-columns: var(--overlay-width-xsmall) minmax(0, 1fr); gap: var(--base-size-24); align-items: start; }
+@media (max-width: 48rem) { .profile { grid-template-columns: minmax(0, 1fr); } }
+.explore { margin-top: var(--base-size-16); }
+.notification { align-items: center; }
+.notification.unread .title { font-weight: var(--base-text-weight-semibold); }
+.notification:not(.unread) .title { font-weight: var(--base-text-weight-normal); color: var(--fgColor-muted); }
+.btn.unread { position: relative; }
+.btn.unread::after { content: ""; position: absolute; top: var(--base-size-4); right: var(--base-size-4); width: var(--base-size-8); height: var(--base-size-8); border-radius: var(--borderRadius-full); background: var(--bgColor-accent-emphasis); box-shadow: 0 0 0 var(--borderWidth-thick) var(--bgColor-inset); }
+.sidenav a .main { flex: 1; }
+dialog.palette { margin-top: var(--base-size-64); }
+.palette-list { margin: 0; padding: 0; list-style: none; max-height: var(--overlay-height-medium); overflow: auto; }
+.palette-list li { display: flex; align-items: center; gap: var(--base-size-8); padding: var(--base-size-6) var(--base-size-8); border-radius: var(--borderRadius-medium); cursor: pointer; }
+.palette-list li[aria-selected="true"] { background: var(--control-transparent-bgColor-selected); box-shadow: inset var(--borderWidth-thick) 0 var(--bgColor-accent-emphasis); }
+.palette-list li svg { color: var(--fgColor-muted); }

@@ -6,6 +6,7 @@ import { el, icon, mark, button, menu, dialog, avatar, flash } from './component
 import { href, navigate } from './router.js';
 import { shell, acceptUpdate } from '../shell.js';
 import { repoPath } from './repo.js';
+import { openPalette, unreadCount } from './home.js';
 
 const header = () => document.getElementById('header');
 const footer = () => document.getElementById('footer');
@@ -18,19 +19,20 @@ export function headerNode({ user, only, bare }) {
   const brand = el('a', { class: 'brand', href: href('/'), 'aria-label': S.header.home }, mark(), el('span', {}, PRODUCT));
   if (!user) return el('div', { class: 'app-header' }, brand, el('span', { class: 'spacer' }), offlineNode(), bare ? '' : button({ label: S.header.getStarted, kind: 'primary', href: href('/welcome') }));
   return el('div', { class: 'app-header' }, brand,
-    has('search') && el('div', { class: 'search', role: 'search' }, icon('search'), el('input', { class: 'input', type: 'search', placeholder: S.header.searchPlaceholder, 'aria-label': S.header.search, 'data-shortcut': 'search' }), el('kbd', { 'aria-hidden': 'true' }, '/')),
+    has('search') && el('form', { class: 'search', role: 'search', onsubmit: (event) => { event.preventDefault(); const q = event.currentTarget.elements.q.value.trim(); if (q) navigate(`/search?q=${encodeURIComponent(q)}`); } }, icon('search'), el('input', { name: 'q', class: 'input', type: 'search', placeholder: S.header.searchPlaceholder, 'aria-label': S.header.search, 'data-shortcut': 'search' }), el('kbd', { 'aria-hidden': 'true' }, '/')),
     el('nav', { 'aria-label': S.header.navigation },
       has('issues') && button({ label: S.header.issues, kind: 'invisible', href: href('/issues') }),
       has('pulls') && button({ label: S.header.pulls, kind: 'invisible', href: href('/pulls') }),
       has('explore') && button({ label: S.header.explore, kind: 'invisible', href: href('/explore/repos') })),
     el('span', { class: 'spacer' }), offlineNode(),
-    has('notifications') && button({ label: S.header.notifications, icon: 'bell', iconOnly: true, kind: 'invisible', href: href('/notifications') }),
+    has('notifications') && button({ label: S.header.notifications, icon: 'bell', iconOnly: true, kind: 'invisible', href: href('/notifications'), attrs: { 'data-bell': '' } }),
     menu({ label: S.header.create, icon: 'plus', iconOnly: true, align: 'end', items: [
       { label: S.header.newRepository, icon: 'repo', href: href('/new') }, { label: S.header.openRepository, icon: 'download', href: href('/open') }] }),
     menu({ align: 'end', trigger: el('summary', { class: 'btn btn-invisible btn-icon', 'aria-label': S.header.account, 'aria-haspopup': 'menu' }, avatar(user.name, { size: 24 })), items: [
       { heading: `${S.header.signedInAs} ${user.name}` }, 'divider',
       // On a narrow screen the header has no room for these two links, so they are here.
-      ...(has('issues') ? [{ label: S.header.issues, icon: 'issue-opened', href: href('/issues'), narrow: true }] : []), ...(has('pulls') ? [{ label: S.header.pulls, icon: 'git-pull-request', href: href('/pulls'), narrow: true }] : []),
+      ...(has('issues') ? [{ label: S.header.issues, icon: 'issue-opened', href: href('/issues'), narrow: true }] : []), ...(has('pulls') ? [{ label: S.header.pulls, icon: 'git-pull-request', href: href('/pulls'), narrow: true }] : []), ...(has('explore') ? [{ label: S.header.explore, icon: 'globe', href: href('/explore/repos'), narrow: true }] : []),
+      ...(has('search') ? [{ label: S.header.search, icon: 'search', href: href('/search'), narrow: true }] : []),
       { label: S.header.settings, icon: 'gear', href: href('/settings/profile') },
       { label: S.header.shortcuts, icon: 'question', onclick: openShortcuts },
       { label: S.header.gallery, icon: 'table', href: href('/-/gallery') }] }));
@@ -46,7 +48,9 @@ let current = { user: null, repo: null, firstRun: false };
 export function drawFrame(state) {
   current = { ...current, ...state };
   // During first run the header offers nothing: the screen itself is the one action.
-  header().replaceChildren(headerNode({ user: current.user, only: ['issues', 'pulls'], bare: current.firstRun }));
+  header().replaceChildren(headerNode({ user: current.user, only: ['search', 'issues', 'pulls', 'explore', 'notifications'], bare: current.firstRun }));
+  // A dot on the bell when something is unread. Worked out after the header is drawn.
+  if (current.user) unreadCount().then((n) => { const bell = header().querySelector('[data-bell]'); if (bell && n) { bell.classList.add('unread'); bell.setAttribute('aria-label', `${S.header.notifications} (${n})`); } });
   footer().replaceChildren(
     el('span', {}, PRODUCT),
     el('button', { type: 'button', class: 'btn-link', onclick: openAbout }, S.footer.about),
@@ -71,7 +75,7 @@ const kbd = (...keys) => keys.map((key, i) => [i > 0 && el('span', { class: 'mut
 export function openShortcuts() {
   const table = (title, rows) => [el('h3', { class: 'small muted' }, title), el('table', { class: 'keys' }, el('tbody', {}, rows.map(([text, keys]) => el('tr', {}, el('td', {}, text), el('td', {}, keys)))))];
   dialog({ title: S.shortcuts.title, body: el('div', { class: 'stack' },
-    table(S.shortcuts.site, [[S.shortcuts.help, kbd('?')], [S.shortcuts.submit, [el('kbd', {}, 'Ctrl'), ' ', el('kbd', {}, 'Enter')]], [S.shortcuts.closeDialog, kbd('Esc')]]),
+    table(S.shortcuts.site, [[S.shortcuts.focusSearch, kbd('/')], [S.palette.open, [el('kbd', {}, 'Ctrl'), ' ', el('kbd', {}, 'K')]], [S.shortcuts.help, kbd('?')], [S.shortcuts.submit, [el('kbd', {}, 'Ctrl'), ' ', el('kbd', {}, 'Enter')]], [S.shortcuts.closeDialog, kbd('Esc')]]),
     current.repo ? table(S.shortcuts.repository, [[S.shortcuts.goCode, kbd('g', 'c')], [S.shortcuts.goPulls, kbd('g', 'p')]]) : '',
     screenKeys.length ? table(S.code.shortcuts, screenKeys.map((key) => [key.label, kbd(key.keys)])) : '') }).showModal();
 }
@@ -114,16 +118,19 @@ export function startChrome() {
       if (form) { event.preventDefault(); form.requestSubmit(); }
       return;
     }
+    // The palette: Ctrl+K anywhere; inside a text field Ctrl+K belongs to the text, so there it is Ctrl+Alt+K.
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && (event.altKey || !typing(event.target))) { event.preventDefault(); openPalette(current); return; }
     if (event.ctrlKey || event.metaKey || event.altKey || typing(event.target) || document.querySelector('dialog[open]')) return;
     if (event.key === '?') { event.preventDefault(); openShortcuts(); return; }
     if (pending === 'g' && current.repo) {
-      const target = { c: repoPath(current.repo), p: repoPath(current.repo, 'pulls') }[event.key];
+      const target = { c: repoPath(current.repo), i: repoPath(current.repo, 'issues'), p: repoPath(current.repo, 'pulls') }[event.key];
       pending = null;
       if (target) { event.preventDefault(); navigate(target); }
       return;
     }
     if (event.key === 'g') { pending = 'g'; clearTimeout(timer); timer = setTimeout(() => { pending = null; }, 1500); return; }
     const own = screenKeys.find((key) => key.keys === event.key);
-    if (own) { event.preventDefault(); own.run(); }
+    if (own) { event.preventDefault(); own.run(); return; }
+    if (event.key === '/') { const box = document.querySelector('[data-shortcut="search"]'); if (box && box.offsetParent) { event.preventDefault(); box.focus(); } else if (current.user) { event.preventDefault(); navigate('/search'); } }
   });
 }

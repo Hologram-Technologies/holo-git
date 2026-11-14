@@ -12,6 +12,7 @@ import { repoHeader, repoHref, repoPath, show, ownerOf } from './repo.js';
 import { renderMarkdown } from './markdown.js';
 import { listRefUpdates, listRepos } from '../store.js';
 import { fold } from '../log.js';
+import { markRead } from './home.js';
 import { deviceKey, openIssue, addComment, setIssue, saveLabel, removeLabel, saveMilestone } from '../identity.js';
 
 // Reading a log checks every signature in it. The result is kept until the log grows.
@@ -128,7 +129,7 @@ export function triage(context, state, issue, mine, change) {
   const milestoneTitle = (id) => (state.milestones.find((m) => m.id === id) || {}).title || '';
   return [
     section(S.issues.assignees, menu({ label: S.issues.edit, iconOnly: true, icon: 'gear', kind: 'invisible', size: 'small', align: 'end', items: [{ label: issue.assignees.includes(mine) ? S.issues.unassignMe : S.issues.assignMe, icon: 'person', onclick: change('assignees', toggle(issue.assignees, mine)) }] }),
-      issue.assignees.length ? issue.assignees.map((key) => el('span', { class: 'row' }, avatar(key.slice(0, 7)), key === mine ? S.common.you : key.slice(0, 7))) : el('span', { class: 'muted' }, S.issues.noOne)),
+      issue.assignees.length ? issue.assignees.map((key) => el('span', { class: 'row' }, avatar(key.slice(0, 7)), key === mine ? S.common.you : (state.names.get(key) || key.slice(0, 7)))) : el('span', { class: 'muted' }, S.issues.noOne)),
     section(S.issues.labels, menu({ label: S.issues.edit, iconOnly: true, icon: 'gear', kind: 'invisible', size: 'small', align: 'end', attrs: { 'data-pick': 'labels' }, items: state.labels.size ? [...state.labels.keys()].map((label) => ({ label, icon: issue.labels.includes(label) ? 'check' : 'dot-fill', onclick: change('labels', toggle(issue.labels, label)) })) : [{ heading: S.issues.noLabelsYet }, { label: S.issues.editLabels, href: repoHref(context.repo, 'labels') }] }),
       issue.labels.length ? issue.labels.map((label) => issueLabel(label, (state.labels.get(label) || {}).color || '')) : el('span', { class: 'muted' }, S.issues.noneYet)),
     section(S.issues.milestone, menu({ label: S.issues.edit, iconOnly: true, icon: 'gear', kind: 'invisible', size: 'small', align: 'end', attrs: { 'data-pick': 'milestone' }, items: [...state.milestones.filter((m) => m.state === 'open' || m.id === issue.milestone).map((m) => ({ label: m.title, icon: m.id === issue.milestone ? 'check' : 'milestone', onclick: change('milestone', m.id === issue.milestone ? '' : m.id) })),
@@ -153,6 +154,7 @@ export async function view(context, number) {
   const repo = context.repo.name;
   const name = profile().name;
   const mine = await me();
+  markRead(issue.id);
   const note = el('div', {});
   const change = (field, value) => async () => { if (await attempt(note, () => setIssue(repo, issue.id, field, value, name))) refresh(); };
 
@@ -191,7 +193,7 @@ export async function view(context, number) {
     if (event.kind === 'title') return timelineItem({ icon: 'pencil', content: [actor, ' ', S.issues.changedTitle, ' ', el('del', {}, event.from), ' ', el('strong', {}, event.to), ' ', when] });
     if (event.kind === 'labels') return timelineItem({ icon: 'tag', content: [actor, ' ', event.added.length ? [S.issues.added, ' ', event.added.map((n) => [issueLabel(n, (state.labels.get(n) || {}).color || ''), ' '])] : '', event.removed.length ? [S.issues.removed, ' ', event.removed.map((n) => [issueLabel(n, (state.labels.get(n) || {}).color || ''), ' '])] : '', when] });
     if (event.kind === 'milestone') return timelineItem({ icon: 'milestone', content: [actor, ' ', event.to ? S.issues.addedToMilestone(milestoneTitle(event.to)) : S.issues.removedFromMilestone(milestoneTitle(event.from)), ' ', when] });
-    return timelineItem({ icon: 'person', content: [actor, ' ', event.added.length ? S.issues.assigned(event.added.map((k) => (k === mine ? S.common.you : k.slice(0, 7))).join(', ')) : S.issues.unassigned(event.removed.map((k) => (k === mine ? S.common.you : k.slice(0, 7))).join(', ')), ' ', when] });
+    return timelineItem({ icon: 'person', content: [actor, ' ', event.added.length ? S.issues.assigned(event.added.map((k) => (k === mine ? S.common.you : (state.names.get(k) || k.slice(0, 7)))).join(', ')) : S.issues.unassigned(event.removed.map((k) => (k === mine ? S.common.you : (state.names.get(k) || k.slice(0, 7)))).join(', ')), ' ', when] });
   });
 
   const composer = commentBox({ render: (text) => (text.trim() ? markdown(context, text) : el('p', { class: 'muted' }, S.parts.nothingToPreview)), onsubmit: async (text) => { if (await attempt(note, () => addComment(repo, issue.id, { body: text, name }))) refresh(); } });

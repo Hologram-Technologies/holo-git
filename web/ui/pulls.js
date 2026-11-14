@@ -12,6 +12,7 @@ import { repoHeader, repoHref, repoPath, show, short, ownerOf } from './repo.js'
 import { renderMarkdown } from './markdown.js';
 import { changes } from './history.js';
 import { readLog, triage, parseQuery } from './issues.js';
+import { markRead } from './home.js';
 import { listRepos, getRefs } from '../store.js';
 import { deviceKey, openPull, addComment, setIssue, review, commentOnLine, resolveThread } from '../identity.js';
 import { resolveCommit, history as walk, person, mergePull } from '../git.js';
@@ -140,6 +141,7 @@ export async function conversation(context, number) {
   const loaded = await frame(context, number, 'conversation');
   if (!loaded) return {};
   const { state, pull, data, checks, head, mine } = loaded;
+  markRead(pull.id);
   const repo = context.repo.name;
   const name = profile().name;
   const note = el('div', {});
@@ -182,7 +184,7 @@ export async function conversation(context, number) {
   const composer = commentBox({ render: (text) => (text.trim() ? markdown(context, text) : el('p', { class: 'muted' }, S.parts.nothingToPreview)), onsubmit: async (text) => { if (await attempt(note, () => addComment(repo, pull.id, { body: text, name }))) refresh(); } });
   if (!pull.merged) composer.querySelector('.foot').prepend(pull.state === 'open' ? button({ label: S.pulls.close, icon: 'git-pull-request-closed', onclick: change('state', 'closed'), attrs: { 'data-close': '' } }) : button({ label: S.pulls.reopen, onclick: change('state', 'open'), attrs: { 'data-reopen': '' } }));
   const reviewers = [...new Set([...pull.approvals, ...pull.changes])];
-  const side = el('aside', { class: 'stack side' }, el('div', { class: 'side-section' }, el('h2', {}, S.pulls.reviewers), reviewers.length ? reviewers.map((key) => el('span', { class: 'row' }, icon(pull.changes.has(key) ? 'x' : 'check', { class: pull.changes.has(key) ? 'fg-danger' : 'fg-success' }), avatar(key.slice(0, 7)), key === mine ? S.common.you : key.slice(0, 7))) : el('span', { class: 'muted' }, S.pulls.noReviews)),
+  const side = el('aside', { class: 'stack side' }, el('div', { class: 'side-section' }, el('h2', {}, S.pulls.reviewers), reviewers.length ? reviewers.map((key) => el('span', { class: 'row' }, icon(pull.changes.has(key) ? 'x' : 'check', { class: pull.changes.has(key) ? 'fg-danger' : 'fg-success' }), avatar(key.slice(0, 7)), key === mine ? S.common.you : (state.names.get(key) || key.slice(0, 7)))) : el('span', { class: 'muted' }, S.pulls.noReviews)),
     triage(context, state, pull, mine, change));
   draw(context, head, note, el('div', { class: 'columns' }, el('div', { class: 'stack' }, first, events.length || threads.length ? timeline(events) : '', threads, mergeBox, composer), side));
   return titled(context, pull);

@@ -100,11 +100,11 @@ test('first run: a name, a sign-in key, then a choice; blank and malformed field
   assert.equal(await page.eval("document.querySelectorAll('#header details.menu').length"), 2, 'the create and account menus appear');
   await page.click('a', S.welcome.later);
   await page.arrive('/');
-  assert.equal(await page.text('#main h1'), S.home.title);
+  assert.equal(await page.text('#main h1'), S.home.dashboard);
   assert.match(await page.text(), new RegExp(S.home.empty));
   // First run is not offered twice.
   await page.reload();
-  assert.equal(await page.text('#main h1'), S.home.title);
+  assert.equal(await page.text('#main h1'), S.home.dashboard);
   noErrors(page);
   await page.close();
 });
@@ -323,7 +323,7 @@ test('a repository screen sits in the new frame: tabs, the go-to keys, and the p
   assert.match(await page.text(), new RegExp(S.newRepo.initial));
   // Failure: a repository this browser does not hold.
   await page.goto(`${site.url}nothing-here`);
-  assert.equal(await page.text('#main h3'), S.repo.notHere);
+  assert.equal(await page.text('#main h3'), S.profile.unknown);
   noErrors(page);
   await page.close();
 });

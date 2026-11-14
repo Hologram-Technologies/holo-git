@@ -33,7 +33,9 @@ const pullKey = (ref, head) => `${ref}\n${head}`;
 // caller must fold again, strictly, once the objects are there.
 export async function fold(records, { strict = false } = {}) {
   const state = { owner: records.length ? records[0].key : null, heads: {}, grants: new Map(), protections: new Map(), pulls: [], checks: new Map(), digest: '', count: records.length, unverified: [],
-    issues: [], labels: new Map(), milestones: [] };
+    issues: [], labels: new Map(), milestones: [],
+    // The name each person last signed with. It is what they call themselves, nothing more.
+    names: new Map() };
   const pulls = new Map();
   const issues = new Map();
   const milestones = new Map();
@@ -224,6 +226,7 @@ export async function fold(records, { strict = false } = {}) {
       const earlier = state.checks.get(record.action);
       state.checks.set(record.action, { name: record.name, result: record.result, by: record.key, time: record.time, changed: Boolean(earlier && earlier.result !== record.result) || Boolean(earlier && earlier.changed) });
     }
+    if (record.name) state.names.set(record.key, String(record.name).slice(0, 100));
     state.digest = await recordDigest(record);
   }
   // For each pull request, how many of its approvals would count if it were merged now.

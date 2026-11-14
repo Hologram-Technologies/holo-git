@@ -10,6 +10,7 @@ import * as code from './code.js';
 import * as past from './history.js';
 import * as issues from './issues.js';
 import * as pulls from './pulls.js';
+import * as house from './home.js';
 import { el, counter } from './components.js';
 import { PRODUCT } from './strings.js';
 import { route, notFound, onError, afterEach, start } from './router.js';
@@ -23,7 +24,12 @@ watchTheme();
 
 const frame = async (path) => drawFrame({ user: (await signedIn()) ? { name: profile().name } : null, ...(path === undefined ? {} : { firstRun: path === '/welcome' }) });
 
-route('/', home);
+const member = (screen) => async (context) => ((await signedIn()) ? screen(context) : home(context));
+route('/', member(house.dashboard));
+route('/explore', member((context) => house.explore({ ...context, params: { what: 'repos' } })));
+route('/explore/:what', member(house.explore));
+route('/notifications', member(house.notifications));
+route('/search', member(house.search));
 route('/welcome', welcome);
 route('/new', newRepository);
 route('/open', openRepository);
@@ -64,7 +70,7 @@ async function repository({ params }) {
 }
 route('/:owner/:repo/*rest', repository);
 route('/:owner/:repo', repository);
-route('/:owner', (context) => repository({ ...context, params: { owner: context.params.owner, repo: '' } }));
+route('/:owner', house.profilePage);
 notFound(notFoundPage);
 onError(errorPage);
 
