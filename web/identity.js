@@ -1,16 +1,9 @@
-// A signing key that never leaves this device, and the signed log of every ref it moved.
+// A signing key that never leaves this device, and the records it signs.
 // The key is ECDSA P-256, generated in the browser as non-extractable.
 
-import { authorize, MODE } from './kernel.js';
-import { loadKey, saveKey, appendRefUpdate, listRefUpdates } from './store.js';
-
-const utf8 = new TextEncoder();
-const hex = (bytes) => Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
-const b64 = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
-const unb64 = (value) => Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
-const sha256 = async (bytes) => hex(await crypto.subtle.digest('SHA-256', bytes));
-const ECDSA = { name: 'ECDSA', namedCurve: 'P-256' };
-const SIGN = { name: 'ECDSA', hash: 'SHA-256' };
+import { fold, GRANTABLE } from './log.js';
+import { statement, sha256, b64, ECDSA, SIGN } from './records.js';
+import { loadKey, saveKey, appendRefUpdate, appendRecord, listRefUpdates } from './store.js';
 
 export async function deviceKey() {
   let pair = await loadKey();
@@ -22,52 +15,49 @@ export async function deviceKey() {
   return { pair, publicKey: b64(spki), id: await sha256(spki) };
 }
 
-// The exact bytes that are signed. One field per line; no field may contain a newline.
-function statement(r) {
-  const fields = ['holo-git/ref-update/1', r.repo, r.ref, r.old, r.next, String(r.time), r.key, r.previous];
-  if (fields.some((field) => /[\n\r]/.test(field))) throw new Error('a ref update field contains a line break');
-  return utf8.encode(fields.join('\n'));
-}
-
-export const recordDigest = (record) => sha256(utf8.encode(`${new TextDecoder().decode(statement(record))}\n${record.signature}`));
-
-export async function verifyRecord(record) {
-  try {
-    const spki = unb64(record.publicKey);
-    if (await sha256(spki) !== record.key) return false;
-    const key = await crypto.subtle.importKey('spki', spki, ECDSA, false, ['verify']);
-    return await crypto.subtle.verify(SIGN, key, unb64(record.signature), statement(record));
-  } catch { return false; }
-}
-
-// Move a ref. The update is signed, the signature is checked, the kernel is asked,
-// and only then is the ref changed, together with its log entry, in one transaction.
-export async function moveRef({ repo, ref, old, next, parents }) {
-  if (!parents.includes(old)) throw new Error('refused: not a fast-forward of the current ref');
+// Sign a new record on top of this repository's log. Nothing is stored unless the whole log,
+// with the new record at its end, still folds: signatures hold and the kernel allows every record.
+async function sign(repo, fields) {
   const key = await deviceKey();
   const log = await listRefUpdates(repo);
-  const record = { repo, ref, old, next, time: Date.now(), key: key.id, publicKey: key.publicKey,
-    previous: log.length ? await recordDigest(log[log.length - 1]) : '' };
+  const before = await fold(log);
+  // The log keeps the name it was started under, whatever this clone is called locally.
+  const record = { ...fields, repo: log.length ? log[0].repo : repo, time: Date.now(), key: key.id, publicKey: key.publicKey, previous: before.digest };
   record.signature = b64(await crypto.subtle.sign(SIGN, key.pair.privateKey, statement(record)));
-  const signed = await verifyRecord(record);
-  // The first signer of a repository's log owns it. A fresh clone with no log belongs to this device.
-  // Grants from other people arrive in a later phase; until then nobody else's updates count.
-  const owner = log.length ? log[0].key : key.id;
-  const granted = owner === key.id ? MODE.owner : MODE.none;
-  if (!authorize({ signed, revoked: false, live: true, granted, required: MODE.write })) {
-    throw new Error(granted === MODE.none ? 'refused by the kernel: this device has no write access to this repository' : 'refused by the kernel: this ref update does not count');
-  }
-  await appendRefUpdate(record);
+  await fold([...log, record]);
   return record;
 }
 
-// Every entry must verify and must name the digest of the entry before it.
+export async function moveRef({ repo, ref, old, next, parents }) {
+  if (!parents.includes(old)) throw new Error('refused: not a fast-forward of the current ref');
+  const record = await sign(repo, { ref, old, next });
+  await appendRefUpdate(repo, record);
+  return record;
+}
+
+// Give another key access. `days` of 0 means no expiry.
+export async function grant(repo, subject, mode, days) {
+  subject = subject.trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(subject)) throw new Error('a key is 64 hexadecimal characters');
+  if (!GRANTABLE.includes(mode)) throw new Error('access can be read or write');
+  if ((await deviceKey()).id === subject) throw new Error('that is this device\'s own key');
+  const notAfter = days > 0 ? Math.floor(Date.now() / 1000) + Math.round(days * 86400) : 0;
+  const record = await sign(repo, { type: 'grant', subject, mode, notAfter });
+  await appendRecord(repo, record);
+  return record;
+}
+
+export async function revoke(repo, subject) {
+  const record = await sign(repo, { type: 'revoke', subject });
+  await appendRecord(repo, record);
+  return record;
+}
+
 export async function checkLog(repo) {
   const log = await listRefUpdates(repo);
-  let previous = '';
-  for (const record of log) {
-    if (record.previous !== previous || !(await verifyRecord(record))) return { entries: log.length, valid: false };
-    previous = await recordDigest(record);
+  try {
+    return { entries: log.length, valid: true, state: await fold(log) };
+  } catch (error) {
+    return { entries: log.length, valid: false, reason: error.message };
   }
-  return { entries: log.length, valid: true, log };
 }

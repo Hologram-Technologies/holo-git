@@ -5,7 +5,7 @@ A serverless code-hosting application that runs entirely in the browser, built a
 Live page: https://humuhumu33.github.io/holo-git/ . Press Clone and it clones this repository from a static replica published beside it.
 Gitea is the reference for features. LexLean specifies the rules and Lean proves them. Storage is content-addressed with kappa labels.
 
-Status: Phase 1 complete, with the gaps listed below. Phase 2 works in the browser: clone, browse, diff, blame, offline. Phase 3: commit in the browser, push to a writable replica, clone it back, export to git. The holo builds on GitHub Actions and replays 16 of 16 acceptance vectors. It rates P0: it does not yet carry provenance, proof or replay statements inside it.
+Status: Phase 1 complete, with the gaps listed below. Phase 2 works in the browser: clone, browse, diff, blame, offline. Phase 3: commit in the browser, push to a writable replica, clone it back, grant and revoke access, export to git. The holo builds on GitHub Actions and replays 16 of 16 acceptance vectors. It rates P0: it does not yet carry provenance, proof or replay statements inside it.
 
 ## What is proved today
 
@@ -85,12 +85,12 @@ Checked by hand in the browser: a commit made in the page was exported as a bund
 Not done yet, and it matters:
 
 - The device key is the only identity. It is not bound to a passkey or a person, and it is not the kappa anchor form. Clearing site data destroys it.
-- The first signer owns a repository. Grants from other people, delegation chains and protected branches are not wired in, though the kernel proves the rules for the first two.
+- Protected branches are not wired in.
 - The fast-forward check is in the host, not in the kernel.
 - One file per commit, text only, on an existing branch. No new branches, deletes, renames or merges.
 - The kernel guest is a committed build output. `scripts/build-web.sh` checks its SHA-256 against `scripts/kernel.sha256`, but the Pages build does not rebuild it from the model.
 
-Kernel guest: SHA-256 `ee9893cf32b8fb138df7473d316311622c30b8c7ad5e5ad497e5ab5330fd0a04`, from commit `f55bf58`, run https://github.com/humuhumu33/holo-git/actions/runs/43533133768, holo fingerprint `blake3:8a6128ba580da7916c4ea2ddea871662cc39dff1eabe803b497d1d0284dc56c6`.
+The kernel guest in the page is recorded under Grants below.
 
 ## Push and writable replicas
 
@@ -99,7 +99,7 @@ A writable replica is plain object storage: GET and PUT by path, and a condition
 - Layout: `objects/sha1/<2 hex>/<38 hex>` holds each git object as its loose-object bytes; `log/<sha256>.json` holds each signed ref update, named by its own digest; `state.json` names each branch's head and latest log record.
 - Push sends only objects the replica cannot already have, then the new log records, then moves the head with a conditional write, so a concurrent push loses cleanly.
 - Clone from a replica walks the signed log first. Every record must hash to its name, verify, chain to the one before, and be allowed by the kernel; the head must be where the log leads. Then objects are fetched and each checked against its label.
-- The first signer of a repository's log owns it. Until grants exist, nobody else's updates count: a second device can clone and read, and the kernel refuses its commits.
+- The first signer of a repository's log owns it. Other keys' updates count only under a grant; see Grants.
 
 `scripts/dev-replica.mjs` is a stand-in object store for development: about 60 lines, no knowledge of git or signatures, no authentication. `scripts/replica-to-git.py` turns a replica's files into a git repository so git can check them.
 
@@ -120,6 +120,37 @@ Limits:
 - One request per object, in both directions. Fine for small repositories, slow for large ones; packs are not used for transfer yet.
 - One branch per repository can be pushed. A repository that has never been changed on this device has no signed log and cannot be pushed.
 - No fetch into an existing clone: to pick up someone else's push, clone again.
+
+## Grants
+
+The owner of a repository can give another device's key read or write access, with an expiry, and take it back.
+
+- A grant and a revocation are signed records in the same chain as changes. Everyone folds the same log and reaches the same heads and the same grants, whoever stored it.
+- One kernel decision covers every record: given the signature check and the issuer's grant as it stood at that point in the log, does this record count? A change needs write; a grant or revocation needs admin, which only the owner has.
+- The kernel takes the grant's expiry and the record's time as 8-byte values and compares them itself.
+- A record signed for one repository is refused in another's log.
+- The Access panel on the Commits page shows this device's key, the grants, and the controls.
+
+Kernel guest: SHA-256 `dc90a15aa3b0253523b0479716ab60771c15b9036c143ad9755660ee215ae144`, from commit `c66750e`, run https://github.com/humuhumu33/holo-git/actions/runs/43543423604, holo fingerprint `blake3:134dd4275ece3d48060a5c7cfd4622469e4ef3ea3c340fa575aeedf0e4a470d9`, 26 of 26 acceptance vectors.
+
+Checked by hand in the browser, with two keys standing in for two devices and the stand-in store between them:
+
+- Alice committed, granted Bob write for 30 days and pushed. Bob cloned, committed and pushed. Alice cloned and saw Bob's commit; the log verified.
+- Bob tried to grant access himself: refused by the kernel.
+- Alice revoked Bob and pushed. Bob cloned and tried to commit: refused by the kernel.
+- A 20-second grant: Bob's commit at 4 seconds was accepted, at 27 seconds refused.
+- A forged record: Bob's key signed a change after revocation and it was written straight to the store, bypassing the page. The signature was valid and the store accepted it. A clone refused the whole log.
+- Git rebuilt from the final replica passes `fsck --strict`.
+
+Limits:
+
+- Expiry trusts the signer's clock. A record carries the time its signer claims, so a holder of an expired grant can backdate a change. Revocation does not have this weakness. Closing it needs a time the signer cannot choose.
+- A revoked or expired key can still write junk to an open store and make the log fail to verify for everyone until the head document is put back. That is an attack on availability, not on integrity.
+- Only the owner can grant. Read and write only; no admin grants, no chains of grants, though the kernel decides chains of up to five links.
+- Read access is not enforced: nothing is encrypted, so anyone who can reach the replica can read it. A read grant is a statement, not a barrier.
+- A grant names a device key, not a person. There is no key-to-identity binding yet.
+- Two people pushing at once: the second is told to clone again. There is no fetch or merge.
+- The proofs cover the access rules. Assembling the request (reading the log, checking signatures, choosing which grant applies) is page code, tested by hand only.
 
 ## Read next
 

@@ -91,20 +91,21 @@ export async function saveKey(pair) {
 
 export async function listRefUpdates(repo) {
   const all = await ask(db.transaction('reflog').objectStore('reflog').getAll());
-  return all.filter((record) => record.repo === repo);
+  // `local` is this device's name for the clone; a record's own `repo` field is what was signed.
+  return all.filter((entry) => (entry.local || entry.repo) === repo).map((entry) => entry.record || entry);
 }
 
 // Compare-and-swap: the ref moves only if it still holds the value the update was signed against.
-export async function appendRefUpdate(record) {
+export async function appendRefUpdate(local, record) {
   const tx = db.transaction(['refs', 'reflog'], 'readwrite');
-  const refs = await ask(tx.objectStore('refs').get(record.repo));
+  const refs = await ask(tx.objectStore('refs').get(local));
   if (!refs || refs[record.ref] !== record.old) {
     tx.abort();
     throw new Error('refused: the ref changed since this update was prepared');
   }
   refs[record.ref] = record.next;
-  tx.objectStore('refs').put(refs, record.repo);
-  tx.objectStore('reflog').add(record);
+  tx.objectStore('refs').put(refs, local);
+  tx.objectStore('reflog').add({ local, record });
   await done(tx);
 }
 
@@ -114,13 +115,19 @@ export async function replaceRefUpdates(repo, records) {
   const store = tx.objectStore('reflog');
   const keys = await ask(store.getAllKeys());
   const values = await ask(store.getAll());
-  values.forEach((record, i) => { if (record.repo === repo) store.delete(keys[i]); });
-  for (const record of records) store.add(record);
+  values.forEach((entry, i) => { if ((entry.local || entry.repo) === repo) store.delete(keys[i]); });
+  for (const record of records) store.add({ local: repo, record });
   await done(tx);
 }
 
 export async function setRepo(repo) {
   const tx = db.transaction('repos', 'readwrite');
   tx.objectStore('repos').put(repo, repo.name);
+  await done(tx);
+}
+
+export async function appendRecord(local, record) {
+  const tx = db.transaction('reflog', 'readwrite');
+  tx.objectStore('reflog').add({ local, record });
   await done(tx);
 }

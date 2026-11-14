@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const web = join(dirname(fileURLToPath(import.meta.url)), '..', 'web');
 const TYPES = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', wasm: 'application/wasm' };
-const PATHS = ['app.js', 'engine.js', 'engine.wasm', 'git.js', 'identity.js', 'index.html', 'kernel.js', 'kernel.wasm', 'replica.js', 'shell.js', 'store.js', 'style.css'];
+const PATHS = ['app.js', 'engine.js', 'engine.wasm', 'git.js', 'identity.js', 'index.html', 'kernel.js', 'kernel.wasm', 'log.js', 'records.js', 'replica.js', 'shell.js', 'store.js', 'style.css'];
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const files = PATHS.map((path) => {

@@ -40,3 +40,26 @@ export const MODE = { none: 0, read: 1, write: 2, admin: 3, owner: 4 };
 export function authorize({ signed, revoked, live, granted, required }) {
   return ask(Uint8Array.of(1, signed ? 1 : 0, revoked ? 1 : 0, live ? 1 : 0, granted, required)) === 'allow';
 }
+
+// Operation 6, decide: does a signed operation count, given the issuer's chain of grants?
+// The chain starts from the owner. Each link carries its scope, whether its own signature held,
+// whether it was revoked, and when it expires (seconds; null for never). Unused links are neutral.
+export function decide({ signed, required, links, now }) {
+  if (links.length > 5) return false;
+  const request = new Uint8Array(67);
+  const view = new DataView(request.buffer);
+  request[0] = 6;
+  request[1] = signed ? 1 : 0;
+  request[2] = required;
+  request[3] = MODE.owner;
+  for (let i = 0; i < 5; i += 1) {
+    const link = links[i] || { scope: MODE.owner, signed: true, revoked: false, notAfter: null };
+    const at = 4 + 11 * i;
+    request[at] = link.scope;
+    request[at + 1] = link.signed ? 1 : 0;
+    request[at + 2] = link.revoked ? 1 : 0;
+    view.setBigUint64(at + 3, link.notAfter == null ? 0xffffffffffffffffn : BigInt(link.notAfter));
+  }
+  view.setBigUint64(59, BigInt(now));
+  return ask(request) === 'allow';
+}

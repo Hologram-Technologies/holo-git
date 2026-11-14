@@ -4,7 +4,7 @@ import { loadEngine, open, diffLines, blameLines, splitLines } from './engine.js
 import { openStore, getObject, getRepo, getRefs, listRepos, countObjects, stats, corruptObject, setRepo } from './store.js';
 import { startShell } from './shell.js';
 import { loadKernel, decisions } from './kernel.js';
-import { checkLog } from './identity.js';
+import { checkLog, deviceKey, grant, revoke } from './identity.js';
 import { push } from './replica.js';
 import { clone, resolveCommit, readTree, lookup, history, changedPaths, person, fileVersions, commitFile, bundleOf } from './git.js';
 
@@ -235,6 +235,37 @@ async function editPage(repo, refs, ref, path) {
   main.replaceChildren(header(repo, refs, ref, 'code'), crumbs(repo, ref, path, 'blob'), form, note);
 }
 
+async function accessTools(repo, log) {
+  const key = await deviceKey();
+  const mine = el('input', { type: 'text', readonly: '', 'aria-label': 'This device\'s key', value: key.id });
+  const state = log.valid ? log.state : null;
+  const owner = state && state.owner;
+  const role = !owner ? 'No signed records yet: the first change made here makes this device the owner.'
+    : owner === key.id ? 'This device owns this repository.'
+      : state.grants.has(key.id) ? `This device has ${state.grants.get(key.id).revoked ? 'a revoked grant' : `${state.grants.get(key.id).mode} access`}.`
+        : 'This device has no access beyond reading.';
+  const note = el('span', { class: 'muted' });
+  const rerender = () => { window.dispatchEvent(new HashChangeEvent('hashchange')); };
+  const rows = state ? [...state.grants].map(([subject, grant]) => el('tr', {},
+    el('td', { class: 'mono' }, subject.slice(0, 16), '…'),
+    el('td', {}, grant.revoked ? 'revoked' : grant.mode),
+    el('td', { class: 'muted' }, grant.notAfter ? `until ${when(grant.notAfter * 1000)}` : 'no expiry'),
+    el('td', {}, grant.revoked ? '' : el('button', { onclick: async () => {
+      try { await revoke(repo.name, subject); rerender(); } catch (error) { note.textContent = ` ${error.message}`; }
+    } }, 'Revoke')))) : [];
+  const subject = el('input', { type: 'text', 'aria-label': 'Key to grant access to', placeholder: 'Their device key (64 characters)' });
+  const mode = el('select', { 'aria-label': 'Access' }, el('option', { value: 'write' }, 'write'), el('option', { value: 'read' }, 'read'));
+  const days = el('input', { type: 'number', min: '0', 'aria-label': 'Days until it expires', placeholder: 'days (0 = no expiry)', value: '30' });
+  const form = el('form', { class: 'push', onsubmit: async (event) => {
+    event.preventDefault();
+    try { await grant(repo.name, subject.value, mode.value, Number(days.value) || 0); rerender(); } catch (error) { note.textContent = ` ${error.message}`; }
+  } }, subject, mode, days, el('button', {}, 'Grant'), note);
+  return el('details', { class: 'access' }, el('summary', {}, 'Access'),
+    el('p', {}, role), el('p', { class: 'push' }, el('span', { class: 'muted' }, 'This device\'s key:'), mine),
+    rows.length ? el('table', { class: 'files' }, rows) : '', form,
+    el('p', { class: 'muted' }, 'A grant or revocation is a signed record. It takes effect for others once pushed.'));
+}
+
 async function branchTools(repo, refs, ref) {
   if (!refs[`refs/heads/${ref}`]) return '';
   const log = await checkLog(repo.name);
@@ -251,9 +282,9 @@ async function branchTools(repo, refs, ref) {
       note.textContent = ` ${bundle.objects} objects, ${bundle.bytes.length} bytes. Fetch it with: git pull ${repo.name}-${ref}.bundle ${ref}`;
     } catch (error) { note.textContent = ` ${error.message}`; }
   } }, 'Download as git bundle');
-  const state = log.entries === 0 ? 'No signed changes yet.'
-    : log.valid ? `${log.entries} change${log.entries === 1 ? '' : 's'} in this repository's signed log, signatures and chain verified.`
-      : 'This repository\'s signed log does NOT verify.';
+  const state = log.entries === 0 ? 'No signed records yet.'
+    : log.valid ? `${log.entries} record${log.entries === 1 ? '' : 's'} in this repository's signed log; signatures, chain and access all verified.`
+      : `This repository's signed log does NOT verify: ${log.reason}`;
   const address = el('input', { type: 'url', 'aria-label': 'Replica address', placeholder: 'https://storage.example.org/project', value: repo.replica || '' });
   const pushNote = el('span', { class: 'muted' });
   const pushButton = el('button', { onclick: async () => {
@@ -268,7 +299,8 @@ async function branchTools(repo, refs, ref) {
   } }, 'Push');
   return el('div', { class: 'tools' },
     el('p', { class: log.valid ? '' : 'error' }, state, ' ', button, note),
-    el('p', { class: 'push' }, address, pushButton, pushNote));
+    el('p', { class: 'push' }, address, pushButton, pushNote),
+    await accessTools(repo, log));
 }
 
 async function commitPage(repo, refs, id) {

@@ -8,8 +8,9 @@
 //   {base}/state.json                      { protocol, head, refs: { name: { id, record } } }
 
 import { labelOf, parseCommit, parseTree, open } from './engine.js';
-import { sameLabel, authorize, MODE } from './kernel.js';
-import { verifyRecord, recordDigest } from './identity.js';
+import { sameLabel } from './kernel.js';
+import { fold } from './log.js';
+import { recordDigest } from './records.js';
 import { getObject, putObjects, hasObject, putRepo, listRefUpdates, replaceRefUpdates } from './store.js';
 
 export const PROTOCOL = 'holo-git/replica/1';
@@ -38,28 +39,6 @@ async function fetchLog(base, digest) {
     digest = record.previous;
   }
   return records;
-}
-
-// The rules a log must satisfy, whoever served it. The first signer owns the ref; until grants
-// exist, only that key's updates count. Returns the head the log leads to.
-export async function verifyChain(records, ref) {
-  if (!records.length) throw new Error('empty log');
-  const owner = records[0].key;
-  let previous = '';
-  let head = null;
-  for (const record of records) {
-    if (record.ref !== ref) throw new Error('refused: the log mixes refs');
-    if (record.previous !== previous) throw new Error('refused: the log chain is broken');
-    if (head !== null && record.old !== head) throw new Error('refused: the log skips a ref value');
-    const signed = await verifyRecord(record);
-    const granted = record.key === owner ? MODE.owner : MODE.none;
-    if (!authorize({ signed, revoked: false, live: true, granted, required: MODE.write })) {
-      throw new Error('refused by the kernel: a ref update in the log does not count');
-    }
-    head = record.next;
-    previous = await recordDigest(record);
-  }
-  return { owner, head, digest: previous };
 }
 
 async function closure(startIds, stop = new Set()) {
@@ -97,9 +76,11 @@ export async function push(repo, branch, base, report = () => {}) {
   base = base.replace(/\/+$/, '');
   const ref = `refs/heads/${branch}`;
   const all = await listRefUpdates(repo.name);
-  if (!all.length) throw new Error('nothing to push: no change has been made on this device');
-  if (all.some((record) => record.ref !== ref)) throw new Error('pushing a repository with changes on several branches is not supported yet');
-  const local = await verifyChain(all, ref);
+  const folded = await fold(all);
+  const branches = Object.keys(folded.heads);
+  if (!branches.length) throw new Error('nothing to push: no change has been made to a branch yet');
+  if (branches.length !== 1 || branches[0] !== ref) throw new Error('pushing a repository with changes on several branches is not supported yet');
+  const local = { head: folded.heads[ref], digest: folded.digest };
   const digests = [];
   for (const record of all) digests.push(await recordDigest(record));
 
@@ -113,7 +94,9 @@ export async function push(repo, branch, base, report = () => {}) {
   if (remote.length === all.length) return { objects: 0, records: 0, head: local.head, upToDate: true };
 
   // Send only what the replica cannot already have: everything new since its head.
-  const have = remote.length ? await closure([remote[remote.length - 1].next]) : new Set();
+  // The replica's head is where its own log leads; the last record may be a grant, not a change.
+  const remoteHead = remote.length ? (await fold(remote)).heads[ref] : null;
+  const have = remoteHead ? await closure([remoteHead]) : new Set();
   const send = [...await closure([local.head], have)];
   let bytes = 0;
   let done = 0;
@@ -139,14 +122,13 @@ export async function push(repo, branch, base, report = () => {}) {
 
 export async function cloneReplica(base, name, state, report = () => {}) {
   const refs = {};
-  const logs = [];
-  for (const [ref, entry] of Object.entries(state.refs)) {
-    if (!ref.startsWith('refs/heads/')) continue;
-    const records = await fetchLog(base, entry.record);
-    const verified = await verifyChain(records, ref);
-    if (verified.head !== entry.id) throw new Error('refused: the replica names a head its signed log does not lead to');
-    refs[ref] = verified.head;
-    logs.push(...records);
+  const entries = Object.entries(state.refs).filter(([ref]) => ref.startsWith('refs/heads/'));
+  // One log covers the repository; every branch entry must name its latest record.
+  const logs = entries.length ? await fetchLog(base, entries[0][1].record) : [];
+  const folded = await fold(logs);
+  for (const [ref, entry] of entries) {
+    if (entry.record !== folded.digest || folded.heads[ref] !== entry.id) throw new Error('refused: the replica names a head its signed log does not lead to');
+    refs[ref] = entry.id;
   }
   if (!Object.keys(refs).length) throw new Error('the replica has no branches');
 
