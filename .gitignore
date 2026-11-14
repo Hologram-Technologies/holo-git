@@ -13,3 +13,4 @@ web/sw.js
 .holo/results/
 .holo/work/
 .holo/runner-key.json
+.holo/key.json
