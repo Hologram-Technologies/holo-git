@@ -354,3 +354,21 @@ h2.day { display: flex; align-items: center; gap: var(--base-size-8); color: var
 .markdown .md-alert.attention { border-color: var(--borderColor-attention-emphasis); } .markdown .md-alert.attention .md-alert-title { color: var(--fgColor-attention); }
 .markdown .md-alert.danger { border-color: var(--borderColor-danger-emphasis); } .markdown .md-alert.danger .md-alert-title { color: var(--fgColor-danger); }
 .readme .box-body { padding: var(--base-size-32); } @media (max-width: 34rem) { .readme .box-body { padding: var(--base-size-16); } }
+
+/* Issues */
+.box-head a.tab-on { color: var(--fgColor-default); font-weight: var(--base-text-weight-semibold); }
+.box-head a.tab-on:hover, .box-head a.muted:hover { text-decoration: none; color: var(--fgColor-default); }
+.row > .main { flex: 1; min-width: var(--base-size-128); }
+.issue-title { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--base-size-8); }
+.issue-title h1 { flex: 1; min-width: 0; font-size: var(--text-title-size-large); font-weight: var(--base-text-weight-normal); line-height: var(--base-text-lineHeight-tight); overflow-wrap: anywhere; }
+.issue-meta { padding-bottom: var(--base-size-16); border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted); }
+.side-section { display: flex; flex-direction: column; gap: var(--base-size-8); padding-bottom: var(--base-size-16); border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted); font-size: var(--text-body-size-small); }
+.side-section h2 { margin: 0; font-size: var(--text-body-size-small); font-weight: var(--base-text-weight-semibold); color: var(--fgColor-muted); }
+.comment .box-body .markdown { font-size: var(--text-body-size-medium); }
+.label-row, .milestone-row { align-items: center; }
+.label-cell { flex: 0 0 var(--overlay-width-xsmall); min-width: 0; }
+.label-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--overlay-width-xsmall), 1fr)); gap: var(--base-size-16); }
+.milestone-progress { flex: 0 1 var(--overlay-width-small); display: flex; flex-direction: column; gap: var(--base-size-4); }
+.progress { height: var(--base-size-8); overflow: hidden; border-radius: var(--borderRadius-medium); background: var(--bgColor-neutral-muted); }
+.progress i { display: block; height: 100%; background: var(--bgColor-success-emphasis); }
+@media (max-width: 34rem) { .label-cell { flex-basis: var(--base-size-96); } .label-row .main { display: none; } .milestone-row { flex-wrap: wrap; } .milestone-progress { flex-basis: 100%; } }

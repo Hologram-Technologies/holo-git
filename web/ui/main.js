@@ -8,6 +8,8 @@ import * as old from '../app.js';
 import { load, splitRef } from './repo.js';
 import * as code from './code.js';
 import * as past from './history.js';
+import * as issues from './issues.js';
+import { el, counter } from './components.js';
 import { PRODUCT } from './strings.js';
 import { route, notFound, onError, afterEach, start } from './router.js';
 import { drawFrame, drawUpdateNotice, setRepoContext, setScreenKeys, startChrome } from './chrome.js';
@@ -27,6 +29,7 @@ route('/open', openRepository);
 route('/settings', (context) => settings({ ...context, params: { tab: 'profile' } }));
 route('/settings/:tab', settings);
 route('/-/gallery', gallery);
+route('/issues', async (context) => ((await signedIn()) ? issues.everywhere(context) : home(context)));
 // Repository screens: /{owner}/{repo}, then a view and what it needs.
 async function repository({ params }) {
   const context = await load(params);
@@ -46,6 +49,10 @@ async function repository({ params }) {
     case 'branches': return past.branches(context);
     case 'tags': return past.tags(context);
     case 'search': return past.search(context);
+    case 'issues': return more[0] === 'new' ? issues.create(context) : more[0] ? issues.view(context, more[0]) : issues.list(context);
+    case 'labels': return issues.labels(context);
+    case 'milestones': return more[0] === 'new' ? issues.milestoneForm(context, null) : more[1] === 'edit' ? issues.milestoneForm(context, more[0]) : issues.milestones(context);
+    case 'milestone': return issues.milestone(context, more[0]);
     case 'pulls': return old.pulls(context);
     case 'pull': return old.pull(context, more[0]);
     case 'resolve': return old.resolve(context, decodeURIComponent(rest));
@@ -64,6 +71,10 @@ afterEach(async ({ path, result }) => {
   document.title = result.title ? `${result.title} · ${PRODUCT}` : PRODUCT;
   setRepoContext(result.repo || null);
   setScreenKeys(result.keys || []);
+  // The Issues tab shows how many are open. It is filled in after the screen, because reading the log takes a moment.
+  const tab = result.repo && document.querySelector('#main nav.tabs a[data-key="issues"]');
+  if (tab) issues.openIssueCount(result.repo.name).then((n) => { if (n && tab.isConnected && !tab.querySelector('.counter')) tab.append(counter(n)); });
+  void el;
   await frame(path);
   // After a navigation, a keyboard or screen-reader user starts at the new screen, not at the old link.
   if (!first && !document.activeElement.closest('#main')) document.getElementById('main').focus({ preventScroll: true });

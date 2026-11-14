@@ -4,7 +4,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "test": "node --test test/page.test.mjs test/merge.test.mjs test/s3.test.mjs test/protect.test.mjs test/pulls.test.mjs test/checks.test.mjs test/share.test.mjs test/prepush.test.mjs test/outputs.test.mjs test/holo.test.mjs test/words.test.mjs test/ui.test.mjs test/code.test.mjs test/issues.test.mjs"
+    "test": "node --test test/page.test.mjs test/merge.test.mjs test/s3.test.mjs test/protect.test.mjs test/pulls.test.mjs test/checks.test.mjs test/share.test.mjs test/prepush.test.mjs test/outputs.test.mjs test/holo.test.mjs test/words.test.mjs test/ui.test.mjs test/code.test.mjs test/issues.test.mjs test/issueui.test.mjs"
   },
   "devDependencies": {
     "@primer/octicons": "19.42.0",

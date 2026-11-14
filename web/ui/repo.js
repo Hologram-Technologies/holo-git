@@ -78,7 +78,7 @@ export function repoHeader(context, tab) {
   return el('div', { class: 'repo-head' },
     el('div', { class: 'title' }, icon('repo', { class: 'fg-muted' }), el('a', { href: href('/') }, ownerOf(repo)), el('span', { class: 'muted' }, '/'), el('a', { class: 'name', href: repoHref(repo) }, repo.name),
       repo.url ? '' : label(S.repo.local)),
-    tabs([{ label: S.repo.code, icon: 'code', href: repoHref(repo), current: tab === 'code' }, { label: S.repo.pulls, icon: 'git-pull-request', href: repoHref(repo, 'pulls'), current: tab === 'pulls' },
+    tabs([{ label: S.repo.code, icon: 'code', href: repoHref(repo), current: tab === 'code' }, { key: 'issues', label: S.repo.issues, icon: 'issue-opened', href: repoHref(repo, 'issues'), current: tab === 'issues' }, { label: S.repo.pulls, icon: 'git-pull-request', href: repoHref(repo, 'pulls'), current: tab === 'pulls' },
       { label: S.repo.settings, icon: 'gear', href: repoHref(repo, 'settings'), current: tab === 'settings' }], { label: S.repo.navigation }));
 }
 

@@ -42,6 +42,8 @@ export function renderMarkdown(source, options = {}) {
       if ((m = /^<(https?:\/\/[^\s<>]+)>/.exec(rest)) || ((i === 0 || /[\s(]/.test(text[i - 1])) && (m = /^(https?:\/\/[^\s<>]*[^\s<>.,;:!?)'"])/.exec(rest)))) {
         flush(); out.push(el('a', { href: m[1], rel: 'noopener noreferrer' }, m[1])); i += m[0].length; continue;
       }
+      // #12 is a link to issue or pull request 12, where the caller says where that is.
+      if (options.reference && (i === 0 || /[\s(]/.test(text[i - 1])) && (m = /^#(\d{1,9})\b/.exec(rest))) { flush(); out.push(el('a', { href: options.reference(m[1]) }, m[0])); i += m[0].length; continue; }
       if ((m = /^(\*\*|__)(?=\S)([\s\S]+?\S)\1/.exec(rest))) { flush(); out.push(el('strong', {}, inline(m[2]))); i += m[0].length; continue; }
       if ((m = /^~~(?=\S)([\s\S]+?\S)~~/.exec(rest))) { flush(); out.push(el('del', {}, inline(m[1]))); i += m[0].length; continue; }
       if ((m = /^\*(?=\S)([\s\S]+?\S)\*(?!\*)/.exec(rest)) || ((i === 0 || /\W/.test(text[i - 1])) && (m = /^_(?=\S)([\s\S]+?\S)_(?!\w)/.exec(rest)))) { flush(); out.push(el('em', {}, inline(m[1]))); i += m[0].length; continue; }

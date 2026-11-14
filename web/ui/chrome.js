@@ -44,7 +44,7 @@ let current = { user: null, repo: null, firstRun: false };
 export function drawFrame(state) {
   current = { ...current, ...state };
   // During first run the header offers nothing: the screen itself is the one action.
-  header().replaceChildren(headerNode({ user: current.user, only: [], bare: current.firstRun }));
+  header().replaceChildren(headerNode({ user: current.user, only: ['issues'], bare: current.firstRun }));
   footer().replaceChildren(
     el('span', {}, PRODUCT),
     el('button', { type: 'button', class: 'btn-link', onclick: openAbout }, S.footer.about),
