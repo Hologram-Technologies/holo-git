@@ -28,7 +28,7 @@ export const ICONS = ['alert', 'arrow-right', 'bell', 'bold', 'book', 'check', '
   'file-directory-fill', 'file-submodule', 'file-symlink-file', 'fold', 'gear', 'git-branch', 'git-commit', 'git-merge', 'git-pull-request', 'git-pull-request-closed',
   'git-pull-request-draft', 'globe', 'graph', 'heading', 'history', 'home', 'inbox', 'info', 'issue-closed', 'issue-opened', 'issue-reopened', 'italic', 'kebab-horizontal', 'key',
   'law', 'link', 'list-ordered', 'list-unordered', 'lock', 'markdown', 'mention', 'milestone', 'moon', 'organization', 'package', 'paperclip', 'pencil', 'people', 'person', 'pin',
-  'play', 'plus', 'question', 'quote', 'repo', 'repo-forked', 'search', 'shield-check', 'sign-out', 'skip', 'star', 'stop', 'sun', 'sync', 'table', 'tag', 'tasklist', 'three-bars',
+  'play', 'plus', 'project', 'pulse', 'question', 'quote', 'repo', 'repo-forked', 'search', 'shield-check', 'sign-out', 'skip', 'star', 'stop', 'sun', 'sync', 'table', 'tag', 'tasklist', 'three-bars',
   'trash', 'triangle-down', 'unfold', 'upload', 'verified', 'x', 'x-circle-fill'];
 
 // The first rule block of a file, as name -> value. Theme files repeat their block inside a media query; the first is enough.

@@ -95,7 +95,7 @@ export const S = {
   failed: { title: 'Something went wrong', lead: 'Reload the page. If it happens again, check your connection.', action: 'Reload' },
   repo: {
     code: 'Code', pulls: 'Pull requests', commits: 'Commits', notHere: 'This repository is not in this browser.', openByAddress: 'Open by address', navigation: 'Repository',
-    local: 'Local', settings: 'Settings', issues: 'Issues',
+    local: 'Local', settings: 'Settings', issues: 'Issues', projects: 'Projects', releases: 'Releases', wiki: 'Wiki', activity: 'Activity',
   },
   repoSettings: {
     general: 'General', collaborators: 'Collaborators', remote: 'Remote', saved: 'Settings saved.',
@@ -193,6 +193,36 @@ export const S = {
     updated: 'updated', by: 'by', noTags: 'There are no tags yet.',
     noResults: (q) => `No files or lines match "${q}".`, results: (n, branch) => `${n} ${n === 1 ? 'file' : 'files'} on ${branch}`, searchTruncated: (n) => `Only the first ${n} files were searched.`,
     shortcuts: 'This screen',
+  },
+  releases: {
+    title: 'Releases', new: 'New release', none: 'There are no releases yet.', noneText: 'A release marks a commit as a version and says what changed.',
+    latest: 'Latest', prerelease: 'Pre-release', released: 'released this', browse: 'Browse files', edit: 'Edit', delete: 'Delete', notFound: 'There is no release with that tag.', back: 'All releases',
+    tag: 'Tag', tagHint: 'A short name for the version, such as v1.0.0. An existing tag is used as it is.', target: 'Target', targetHint: 'The release marks the newest commit of this branch.', titleField: 'Release title', notes: 'Describe this release',
+    markPrerelease: 'Set as a pre-release', prereleaseHint: 'Says this version is not ready for everyone yet.', publish: 'Publish release', update: 'Update release', editTitle: 'Edit release',
+    tagBlank: 'Enter a tag.', tagInvalid: 'A tag cannot contain spaces or any of ~ ^ : ? * [ and cannot start with a dash. Change the tag and try again.', tagTaken: 'Another release already uses this tag. Choose a different one.', titleBlank: 'Enter a title.',
+    deleteTitle: 'Delete this release?', deleteText: 'The release and its notes are removed. The commit it marks stays.', deleteConfirm: 'Delete release', noNotes: 'No notes were written for this release.',
+  },
+  wiki: {
+    title: 'Wiki', pages: 'Pages', none: 'This wiki has no pages yet.', noneText: 'Write down how the project works, for the people who join it.', createFirst: 'Create the first page', newPage: 'New page', edit: 'Edit', history: 'History', view: 'View page', home: 'Home',
+    missing: (name) => `There is no page called ${name}.`, createThis: 'Create this page', pageTitle: 'Title', content: 'Content', contentHint: 'Markdown. Link to another page with [[its title]].', save: 'Save page', delete: 'Delete page',
+    titleBlank: 'Enter a title.', titleInvalid: 'A title cannot contain a slash or start with an underscore. Change the title and try again.', titleTaken: 'A page with this title already exists. Edit that page, or choose another title.',
+    lastEdited: (name) => `Last edited by ${name}`, revisions: (n) => `${n} ${n === 1 ? 'revision' : 'revisions'}`, saved: 'saved this page', deleted: 'deleted this page', historyOf: (name) => `History of ${name}`, editTitle: (name) => `Edit ${name}`,
+    older: 'You are reading an older version of this page.', current: 'Read the current version', deleteTitle: 'Delete this page?', deleteText: 'The page leaves the wiki. Its history is kept.',
+  },
+  projects: {
+    title: 'Projects', new: 'New project', none: 'There are no projects yet.', noneText: 'A project is a board that sorts issues and pull requests into columns.', noClosed: 'There are no closed projects.', create: 'Create project', editTitle: 'Edit project', name: 'Project name', nameBlank: 'Enter a name.',
+    items: (n) => `${n} ${n === 1 ? 'item' : 'items'}`, notFound: 'There is no project with that number.', back: 'All projects', closed: 'Closed', close: 'Close project', reopen: 'Reopen project', edit: 'Edit project', options: 'Project options',
+    columns: { todo: 'To do', doing: 'In progress', done: 'Done' }, addColumn: 'Add column', columnName: 'Column name', columnBlank: 'Enter a name for the column.', columnOptions: (name) => `Options for ${name}`, rename: 'Rename', renameColumn: 'Rename column', deleteColumn: 'Delete column', add: 'Add',
+    addItem: 'Add item', nothingToAdd: 'Every open issue and pull request is on the board.', cardOptions: (title) => `Options for ${title}`, moveTo: (name) => `Move to ${name}`, remove: 'Remove from project', noColumns: 'This project has no columns.', empty: 'No items',
+    tooMany: 'A project can have up to 20 columns. Delete one before adding another.',
+  },
+  activity: {
+    title: 'Activity', pulse: 'Pulse', contributors: 'Contributors', commits: 'Commits', navigation: 'Activity pages', period: 'Period', periods: { 1: '24 hours', 7: '1 week', 30: '1 month' }, range: (from, to) => `${from} to ${to}`,
+    merged: 'Merged pull requests', opened: 'Opened pull requests', closed: 'Closed issues', fresh: 'New issues', released: 'Releases published', quiet: 'Nothing happened in this period.',
+    summary: (authors, commits, branch) => `${authors} ${authors === 1 ? 'author has' : 'authors have'} made ${commits} ${commits === 1 ? 'commit' : 'commits'} on ${branch}, not counting merges.`, noCommits: (branch) => `There are no commits on ${branch} to count.`,
+    onBranch: (branch) => `Counted from the commits on ${branch}.`, limited: (n) => `Only the newest ${n} commits are counted.`, commitCount: (n) => `${n} ${n === 1 ? 'commit' : 'commits'}`, between: (from, to) => `${from} to ${to}`,
+    perWeek: 'Commits each week, over the last year', weekOf: (date, n) => `Week of ${date}: ${n} ${n === 1 ? 'commit' : 'commits'}`, yearTotal: (n) => `${n} ${n === 1 ? 'commit' : 'commits'} in the last 52 weeks.`,
+    busiest: (date, n) => `The busiest week began ${date}, with ${n}.`, seeCommits: 'See every commit', noneThisYear: 'There were no commits in the last 52 weeks.',
   },
   parts: {
     breadcrumb: 'Breadcrumb', page: (n) => `Page ${n}`, directory: 'Directory', file: 'File', committed: 'committed', commented: 'commented',
