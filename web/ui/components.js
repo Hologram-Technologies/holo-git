@@ -77,9 +77,14 @@ export function issueLabel(text, hex) {
   const clean = /^#?[0-9a-f]{6}$/i.test(hex) ? hex.replace('#', '') : null;
   const node = el('span', { class: 'label issue' }, text);
   if (clean) {
-    const [r, g, b] = [0, 2, 4].map((i) => parseInt(clean.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-    node.classList.add(0.2126 * r + 0.7152 * g + 0.0722 * b > 0.179 ? 'on-light' : 'on-dark');
-    node.style.setProperty('--ui-label', `#${clean}`);
+    // Light colours take dark text and dark colours take white. In between, neither reads at 4.5 to 1,
+    // so the colour is shown a little darker, same hue, until white does.
+    let rgb = [0, 2, 4].map((i) => parseInt(clean.slice(i, i + 2), 16));
+    const light = (list) => { const [r, g, b] = list.map((v) => v / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    const dark = light(rgb) >= 0.26;
+    if (!dark) while (light(rgb) > 0.18) rgb = rgb.map((v) => Math.floor(v * 0.96));
+    node.classList.add(dark ? 'on-light' : 'on-dark');
+    node.style.setProperty('--ui-label', `#${rgb.map((v) => v.toString(16).padStart(2, '0')).join('')}`);
   }
   return node;
 }

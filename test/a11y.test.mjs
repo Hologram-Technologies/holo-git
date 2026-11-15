@@ -81,9 +81,14 @@ test('no screen fails the audit, in light or dark: names, labels, text contrast,
   await page.waitFor("!!document.querySelector('[data-reopen]')", 'the closed issue');
   await go(page, `${REPO}/labels`);
   await page.click('#main .page-head button', S.issues.newLabel);
-  await page.fill(await page.field(S.issues.labelName), 'bug');
-  await page.click('button', S.issues.createLabel);
-  await page.waitFor("!!document.querySelector('#main .label-row')", 'the label');
+  // Three labels: a dark colour, a light one, and one in between, where neither white nor dark text reads without help.
+  for (const [i, [name, color]] of [['bug', '#b60205'], ['idea', '#fef2c0'], ['help', '#e4572e']].entries()) {
+    if (i) await page.click('#main .page-head button', S.issues.newLabel);
+    await page.fill(await page.field(S.issues.labelName), name);
+    await page.fill(await page.field(S.issues.color), color);
+    await page.click('button', S.issues.createLabel);
+    await page.waitFor(`document.querySelectorAll('#main .label-row').length === ${i + 1}`, `the label ${name}`);
+  }
   await go(page, `${REPO}/milestones/new`);
   await page.fill(await page.field(S.issues.titleField), 'Version 1');
   await page.click('button', S.issues.createMilestone);

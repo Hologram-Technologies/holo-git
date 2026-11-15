@@ -13,7 +13,7 @@ It is not a standard tool. A standard one was to be added as a development depen
 | Finding | Where | Fix |
 |---|---|---|
 | Initials on avatars under 4.5 to 1 (as low as 3.2) | every avatar, both themes | avatar colours now come from the eight backgrounds meant to carry white text; all are 4.5 or more in both themes |
-| White text on mid-tone issue labels under 4.5 to 1 | a label in the default red | dark text is chosen sooner: whichever of white and black reads better |
+| Text on issue labels under 4.5 to 1 | labels in mid-tone colours, where neither white nor dark text reads | light colours take dark text, dark ones white; a colour in between is shown a little darker, same hue, until white reads. The first fix was not enough: a new label gets a random colour, and the build machine drew one that still failed. The test now makes a label in such a colour on purpose |
 | No top heading | 25 screens, most of them under a repository | every screen now has one; where the design shows none, the screen's name is there for a screen reader |
 | Empty states used a third-level heading under a first-level one | every empty state | second level |
 | The Write and Preview strip was an unnamed navigation | every comment box | named |
