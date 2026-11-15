@@ -53,7 +53,7 @@ async function change(page, path, text, message, { propose } = {}) {
 test('a pull request: proposed, discussed, commented on at a line, reviewed, and merged; the list and every tab show it', async () => {
   const page = await withRepo();
   await go(page, `${REPO}/pulls`);
-  assert.equal(await page.text('#main .blankslate h3'), S.pulls.none);
+  assert.equal(await page.text('#main .blankslate h2'), S.pulls.none);
   await change(page, 'README.md', '# demo\n\nNow with more words.\nAnd a second line.\n', 'Say more in the README', { propose: true });
   assert.deepEqual(await page.eval("[...document.querySelectorAll('.box-row a.title')].map((a) => a.textContent)"), ['Say more in the README']);
   assert.equal((await page.text('[data-count=open]')).trim(), S.issues.openCount(1));
@@ -111,7 +111,7 @@ test('a pull request: proposed, discussed, commented on at a line, reviewed, and
   assert.deepEqual(await page.eval("[...document.querySelectorAll('.box-row a.title')].map((a) => a.textContent)"), ['Say more in the README']);
   await page.click('nav.tabs a', S.pulls.checks);
   await page.arrive(`${REPO}/pull/1/checks`);
-  assert.equal(await page.text('#main .blankslate h3'), S.pulls.noChecks('main'));
+  assert.equal(await page.text('#main .blankslate h2'), S.pulls.noChecks('main'));
 
   await go(page, `${REPO}/pull/1`);
   await page.click('[data-merge]');
@@ -126,7 +126,7 @@ test('a pull request: proposed, discussed, commented on at a line, reviewed, and
   assert.equal(await count(page, 'table.diff tr.add'), 3, 'a merged pull request still shows what it changed');
   // Failure: a number that is no pull request.
   await go(page, `${REPO}/pull/99`);
-  assert.equal(await page.text('#main .blankslate h3'), S.pulls.notFound);
+  assert.equal(await page.text('#main .blankslate h2'), S.pulls.notFound);
   noErrors(page);
   await page.close();
 });

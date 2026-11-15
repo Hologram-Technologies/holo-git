@@ -12,7 +12,7 @@ import { build } from '../scripts/build-ui.mjs';
 
 // docs/PROMPT-UI.md, "Words": never shown to a user, anywhere.
 const BANNED = [['Prism', /prism/i], ['UOR', /\buor\b/i], ['kappa', /kappa/i], ['holo', /holo/i], ['LexLean', /lexlean/i], ['kernel', /kernel/i], ['engine', /engine/i],
-  ['fold', /\bfold(s|ed|ing)?\b/i], ['record', /\brecords?\b/i], ['signed log', /signed log/i], ['replica', /replica/i], ['action key', /action key/i], ['digest', /digest/i],
+  ['fold', /\bfold(s|ed|ing)?\b/i], ['record', /\brecord(s|ed|ing)?\b/i], ['signed log', /signed log/i], ['replica', /replica/i], ['action key', /action key/i], ['digest', /digest/i],
   ['label', /\blabels?\b/i], ['attestation', /attestation/i], ['delegation', /delegation/i], ['grant', /\bgrant(s|ed)?\b/i], ['closure', /closure/i], ['manifest', /manifest/i], ['wasm', /wasm/i]];
 // "label" is banned in the content-address sense only; issue labels are a feature. These entries use it in that sense.
 const LABEL_ALLOWED = new Set(['gallery.small']);
@@ -41,6 +41,18 @@ test('no string in the strings file contains a banned word, an exclamation mark,
     if (words.length >= 2 && !/[.:]/.test(text)) problems.push(`${path}: "${text}" looks like Title Case`);
   }
   assert.deepEqual(problems, []);
+});
+
+test('every string in the strings file is shown somewhere: nothing is left over', () => {
+  const code = readdirSync(join(root, 'web', 'ui')).filter((name) => name.endsWith('.js') && !['strings.js', 'icons.js'].includes(name)).map((name) => readFileSync(join(root, 'web', 'ui', name), 'utf8')).join('\n');
+  const named = (path) => new RegExp(`S\\.${path.join('\\.')}(?![A-Za-z0-9_])`).test(code);
+  const unused = [];
+  for (const [path] of collect(S)) {
+    const parts = path.split('.');
+    // A string is used by name, or, when it sits in a group that is looked up by key, through the group.
+    if (!named(parts) && !parts.slice(2).some((_, i) => named(parts.slice(0, i + 2)))) unused.push(path);
+  }
+  assert.deepEqual(unused, []);
 });
 
 test('the rebuilt interface keeps its wording in the strings file: no banned word in any literal elsewhere', () => {

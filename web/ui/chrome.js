@@ -54,7 +54,8 @@ export function drawFrame(state) {
   footer().replaceChildren(
     el('span', {}, PRODUCT),
     el('button', { type: 'button', class: 'btn-link', onclick: openAbout }, S.footer.about),
-    el('button', { type: 'button', class: 'btn-link', onclick: openShortcuts }, S.footer.shortcuts));
+    el('button', { type: 'button', class: 'btn-link', onclick: openShortcuts }, S.footer.shortcuts),
+    el('a', { href: href('/different') }, S.footer.different));
 }
 export const setRepoContext = (repo) => { current.repo = repo; };
 // Keys that belong to the screen on show: [{ keys: 't', label, run }]. Replaced on every navigation.

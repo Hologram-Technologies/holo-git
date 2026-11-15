@@ -83,7 +83,7 @@ test('general settings: a description, a new name, and deleting only when the na
   assert.equal(await page.eval("document.querySelector('dialog button[type=submit]').disabled"), false);
   await page.click('dialog button[type=submit]');
   await page.arrive('/');
-  assert.equal(await page.text('.repo-list .blankslate h3'), S.home.empty);
+  assert.equal(await page.text('.repo-list .blankslate h2'), S.home.empty);
   noErrors(page);
   await page.close();
 });
@@ -91,7 +91,7 @@ test('general settings: a description, a new name, and deleting only when the na
 test('collaborators and branch rules: added, shown, and removed; bad keys and bad numbers are reported; a protected branch refuses a direct commit', async () => {
   const page = await withRepo();
   await go(page, `${REPO}/settings/collaborators`);
-  assert.equal(await page.text('#main .blankslate h3'), S.repoSettings.noCollaborators);
+  assert.equal(await page.text('#main .blankslate h2'), S.repoSettings.noCollaborators);
   const key = await page.field(S.repoSettings.theirKey);
   await page.fill(key, 'not-a-key');
   await page.click('button', S.repoSettings.add);
@@ -113,7 +113,7 @@ test('collaborators and branch rules: added, shown, and removed; bad keys and ba
   await page.waitFor(`!document.querySelector('[data-collaborator="${other}"]')`, 'the collaborator to go');
 
   await go(page, `${REPO}/settings/branches`);
-  assert.equal(await page.text('#main .blankslate h3'), S.repoSettings.noRules);
+  assert.equal(await page.text('#main .blankslate h2'), S.repoSettings.noRules);
   await page.click('.page-head a', S.repoSettings.addRule);
   await page.arrive(`${REPO}/settings/branches/new`);
   const approvals = await page.field(S.repoSettings.approvals);

@@ -47,6 +47,14 @@ export function mark(size = 32) {
   return svg;
 }
 
+// Run once the screen that was just built has been painted, so slow work never delays it. The timer covers a tab that is not being shown, where no frame comes.
+export function afterPaint(run) {
+  let ran = false;
+  const once = () => { if (!ran) { ran = true; run(); } };
+  requestAnimationFrame(() => setTimeout(once, 0));
+  setTimeout(once, 250);
+}
+
 const KINDS = { default: '', primary: ' btn-primary', danger: ' btn-danger', invisible: ' btn-invisible' };
 const SIZES = { medium: '', small: ' btn-sm', large: ' btn-lg' };
 
@@ -70,7 +78,7 @@ export function issueLabel(text, hex) {
   const node = el('span', { class: 'label issue' }, text);
   if (clean) {
     const [r, g, b] = [0, 2, 4].map((i) => parseInt(clean.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-    node.classList.add(0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? 'on-light' : 'on-dark');
+    node.classList.add(0.2126 * r + 0.7152 * g + 0.0722 * b > 0.179 ? 'on-light' : 'on-dark');
     node.style.setProperty('--ui-label', `#${clean}`);
   }
   return node;
@@ -164,7 +172,7 @@ export function flash(tone, content, { onDismiss } = {}) {
 }
 
 // An empty state: one line and one action.
-export const blankslate = ({ icon: name, title, text, action }) => el('div', { class: 'blankslate' }, name && icon(name, { size: 24 }), el('h3', {}, title), text && el('p', { class: 'muted' }, text), action);
+export const blankslate = ({ icon: name, title, text, action }) => el('div', { class: 'blankslate' }, name && icon(name, { size: 24 }), el('h2', {}, title), text && el('p', { class: 'muted' }, text), action);
 
 export function pagination({ page, pages, href }) {
   if (pages <= 1) return '';
@@ -245,7 +253,7 @@ export function commentBox({ placeholder = S.parts.leaveComment, submit = S.part
   const head = el('div', { class: 'box-head' });
   const send = () => { if (area.value.trim()) { onsubmit(area.value); area.value = ''; } else area.focus(); };
   function draw() {
-    head.replaceChildren(el('nav', { class: 'tabs flush', role: 'tablist' }, tab('write', S.parts.write), tab('preview', S.parts.preview)));
+    head.replaceChildren(el('nav', { class: 'tabs flush', role: 'tablist', 'aria-label': S.parts.editorView }, tab('write', S.parts.write), tab('preview', S.parts.preview)));
     area.hidden = mode !== 'write';
     preview.hidden = mode !== 'preview';
     if (mode === 'preview') preview.replaceChildren(render(area.value));

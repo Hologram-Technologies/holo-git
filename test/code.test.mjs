@@ -68,9 +68,9 @@ test('code: files with their last commit, the rendered README, and a way into fo
   await page.arrive(`${REPO}/tree/main/docs`);
   // Failures.
   await go(page, `${REPO}/tree/no-such-branch`);
-  assert.equal(await page.text('#main .blankslate h3'), S.code.noRef('no-such-branch'));
+  assert.equal(await page.text('#main .blankslate h2'), S.code.noRef('no-such-branch'));
   await go(page, `${REPO}/blob/main/docs/missing.txt`);
-  assert.equal(await page.text('#main .blankslate h3'), S.code.noFile('main'));
+  assert.equal(await page.text('#main .blankslate h2'), S.code.noFile('main'));
   noErrors(page);
   await page.close();
 });
@@ -133,7 +133,7 @@ test('file view: numbered lines, a selection kept in the address, a permanent li
   assert.equal(await page.text('#L1 td.text'), '# Fixture');
   // Failure: blame of a file that is not there.
   await go(page, `${REPO}/blame/main/nope.txt`);
-  assert.equal(await page.text('#main .blankslate h3'), S.code.noFile('main'));
+  assert.equal(await page.text('#main .blankslate h2'), S.code.noFile('main'));
   noErrors(page);
   await page.close();
 });
@@ -171,9 +171,9 @@ test('commits and one commit: grouped list, file history, a diff shown unified o
   assert.deepEqual(await page.eval("[...document.querySelectorAll('.diff-file > summary .mono')].map((n) => n.textContent)"), ['docs/notes.txt', 'src/new.txt', 'src/old.txt']);
   // Failures.
   await go(page, `${REPO}/commit/${'0'.repeat(40)}`);
-  assert.equal(await page.text('#main .blankslate h3'), S.code.noCommit);
+  assert.equal(await page.text('#main .blankslate h2'), S.code.noCommit);
   await go(page, `${REPO}/compare/nope...main`);
-  assert.equal(await page.text('#main .blankslate h3'), S.code.noCompare);
+  assert.equal(await page.text('#main .blankslate h2'), S.code.noCompare);
   noErrors(page);
   await page.close();
 });
@@ -185,7 +185,7 @@ test('branches, tags and search: lists from the repository, and text found in fi
   assert.deepEqual(await page.eval("[...document.querySelectorAll('.box-row a.title')].map((a) => a.textContent)"), ['main']);
   assert.match(await page.text('.box-row .aside'), new RegExp(S.code.default));
   await go(page, `${REPO}/tags`);
-  assert.equal(await page.text('#main .blankslate h3'), S.code.noTags);
+  assert.equal(await page.text('#main .blankslate h2'), S.code.noTags);
 
   await go(page, REPO);
   await page.fill(`aside input[type=search]`, 'inserted');
@@ -197,7 +197,7 @@ test('branches, tags and search: lists from the repository, and text found in fi
   await page.arrive(`${REPO}/blob/main/docs/notes.txt`);
   assert.equal(await page.eval("document.querySelector('.code-lines tr.selected td.text').textContent"), 'an inserted line', 'a result opens the file at its line');
   await go(page, `${REPO}/search?q=zzzqqq`);
-  assert.equal(await page.text('#main .blankslate h3'), S.code.noResults('zzzqqq'));
+  assert.equal(await page.text('#main .blankslate h2'), S.code.noResults('zzzqqq'));
   noErrors(page);
   await page.close();
 });
@@ -240,7 +240,7 @@ test('editor: a new file and an edit become commits; a blank name and an unchang
   // Failure: a tag or commit cannot be edited.
   const sha = await page.eval("document.querySelector('.box-head a.mono').getAttribute('href').split('/').pop()");
   await page.goto(`${site.url}ada-example/demo/edit/${sha}/README.md`);
-  assert.equal(await page.text('#main .blankslate h3'), S.code.editNeedsBranch);
+  assert.equal(await page.text('#main .blankslate h2'), S.code.editNeedsBranch);
   noErrors(page);
   await page.close();
 });

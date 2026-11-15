@@ -11,7 +11,7 @@ export const slug = (text) => String(text).toLowerCase().replace(/[^a-z0-9]+/g, 
 // Repositories are stored by name alone. The owner shown in an address is where the repository came
 // from: for one opened by address, the path segment before its name; for one made here, its maker.
 // First path segments the app or its files already use. An owner with one of these names gets a suffix, so its addresses cannot be mistaken for them.
-const RESERVED = new Set(['new', 'open', 'settings', 'welcome', 'fixtures', 'ui', 'issues', 'pulls', 'explore', 'notifications', 'search', 'organizations']);
+const RESERVED = new Set(['new', 'open', 'settings', 'welcome', 'fixtures', 'ui', 'issues', 'pulls', 'explore', 'notifications', 'search', 'organizations', 'different']);
 const free = (name) => (RESERVED.has(name) ? `${name}-1` : name);
 export function ownerOf(repo) { return free(rawOwner(repo)); }
 function rawOwner(repo) {

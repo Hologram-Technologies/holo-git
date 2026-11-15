@@ -1,7 +1,7 @@
 // The Code tab: the file table with its README and sidebar, a directory, a file, blame, and the editor.
 
 import { S } from './strings.js';
-import { el, icon, button, menu, box, blankslate, flash, fileTable, avatar, relativeTime, textInput, textArea, field, validate, segmented } from './components.js';
+import { afterPaint, el, icon, button, menu, box, blankslate, flash, fileTable, avatar, relativeTime, textInput, textArea, field, validate, segmented } from './components.js';
 import { navigate } from './router.js';
 import { profile } from './session.js';
 import { repoHeader, refSwitcher, pathCrumbs, repoHref, repoPath, show, short, decode, isBinary, size, saveFile } from './repo.js';
@@ -194,7 +194,7 @@ export async function tree(context, at) {
     body = el('div', { class: 'columns' }, body, el('aside', { class: 'stack side' }, search, el('div', {}, el('h2', {}, S.code.about), el('p', { class: context.repo.description ? '' : 'muted' }, context.repo.description || S.code.noDescription)), langs));
   }
   show('wide', repoHeader(context, 'code'), el('div', { class: 'page' }, body));
-  setTimeout(() => later.forEach((run) => run().catch(() => {})), 0);
+  afterPaint(() => later.forEach((run) => run().catch(() => {})));
   return { title: at.path ? `${at.path} ${S.code.at} ${at.ref} · ${context.repo.name}` : context.repo.name, repo: context.repo,
     keys: [{ keys: 't', label: S.code.goToFile, run: () => document.querySelector('[data-finder]').focus() }, { keys: 'w', label: S.code.switchTitle, run: () => { const d = document.querySelector('#main details.menu'); d.open = true; d.querySelector('a').focus(); } }] };
 }
@@ -245,9 +245,15 @@ export async function blob(context, at) {
 // Numbered lines. A click on a number selects that line, Shift-click extends to a range, and the
 // selection lives in the address as #L3 or #L3-L9, so it can be shared and survives a reload.
 const MAX_LINES = 5000;
+const FIRST_LINES = 120;
 function codeTable(lines) {
   const shown = lines.slice(0, MAX_LINES);
-  const table = el('table', { class: 'code-lines' }, el('tbody', {}, shown.map((line, i) => el('tr', { id: `L${i + 1}` }, el('td', { class: 'num' }, el('a', { href: `#L${i + 1}`, 'aria-label': S.code.line(i + 1) }, i + 1)), el('td', { class: 'text' }, line)))));
+  const row = (line, i) => el('tr', { id: `L${i + 1}` }, el('td', { class: 'num' }, el('a', { href: `#L${i + 1}`, 'aria-label': S.code.line(i + 1) }, i + 1)), el('td', { class: 'text' }, line));
+  // The first screenful is drawn at once and the rest once it is on screen. An address that names a line needs every line there to scroll to.
+  const early = /^#L\d+/.test(location.hash) ? shown.length : FIRST_LINES;
+  const body = el('tbody', {}, shown.slice(0, early).map(row));
+  const table = el('table', { class: 'code-lines' }, body);
+  if (shown.length > early) afterPaint(() => body.append(...shown.slice(early).map((line, i) => row(line, i + early))));
   const node = lines.length > MAX_LINES ? el('div', {}, table, el('p', { class: 'box-body muted' }, S.code.truncated(MAX_LINES))) : table;
   let anchor = null;
   const apply = (from, to, scroll) => {

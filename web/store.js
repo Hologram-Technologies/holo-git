@@ -8,7 +8,16 @@ import { sameLabel } from './kernel.js';
 let db;
 export const stats = { read: 0, refused: 0 };
 
+// Objects that were read from storage and found to match their name stay in memory while the page
+// lives, so a commit or a folder is not fetched and judged again on every screen. Only bytes that
+// passed are kept, and they are the bytes handed out, so nothing unjudged is ever used. Writing to
+// a name, or opening another store, forgets it. Large objects are not kept.
+const judged = new Map();
+const KEEP = 4000;
+const SMALL = 64 * 1024;
+
 export function openStore() {
+  judged.clear();
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('holo-git', 2);
     request.onupgradeneeded = () => {
@@ -35,7 +44,7 @@ export const label = (id) => `sha1:${id}`;
 export async function putObjects(objects) {
   const tx = db.transaction('objects', 'readwrite');
   const store = tx.objectStore('objects');
-  for (const { id, envelope } of objects) store.put(envelope.slice(), label(id));
+  for (const { id, envelope } of objects) { judged.delete(id); store.put(envelope.slice(), label(id)); }
   await done(tx);
 }
 
@@ -45,6 +54,8 @@ export async function hasObject(id) {
 
 // Returns the envelope, or throws if it is absent or its bytes no longer match the label.
 export async function getObject(id) {
+  const kept = judged.get(id);
+  if (kept) return kept;
   const envelope = await ask(db.transaction('objects').objectStore('objects').get(label(id)));
   if (!envelope) throw new Error(`object ${id} is not in the store`);
   stats.read += 1;
@@ -52,6 +63,10 @@ export async function getObject(id) {
   if (!sameLabel(id, labelOf(envelope))) {
     stats.refused += 1;
     throw new Error(`object ${id} refused: stored bytes do not match their label`);
+  }
+  if (envelope.length <= SMALL) {
+    if (judged.size >= KEEP) judged.delete(judged.keys().next().value);
+    judged.set(id, envelope);
   }
   return envelope;
 }
@@ -73,6 +88,7 @@ export const listRepos = () => ask(db.transaction('repos').objectStore('repos').
 
 // Test hook: overwrite one stored object's bytes without changing its key.
 export async function corruptObject(id) {
+  judged.delete(id);
   const tx = db.transaction('objects', 'readwrite');
   const store = tx.objectStore('objects');
   const envelope = await ask(store.get(label(id)));

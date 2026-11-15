@@ -203,7 +203,7 @@ test('settings: the profile is validated and saved; a theme is applied at once, 
   assert.match(await page.text('[data-key]'), /^[0-9a-f]{64}$/);
   // Failure: a settings page that does not exist.
   await page.goto(`${site.url}settings/billing`);
-  assert.equal(await page.text('#main h3'), S.notFound.title);
+  assert.equal(await page.text('#main .blankslate h2'), S.notFound.title);
   noErrors(page);
   await page.close();
 });
@@ -323,7 +323,7 @@ test('a repository screen sits in the new frame: tabs, the go-to keys, and the p
   assert.match(await page.text(), new RegExp(S.newRepo.initial));
   // Failure: a repository this browser does not hold.
   await page.goto(`${site.url}nothing-here`);
-  assert.equal(await page.text('#main h3'), S.profile.unknown);
+  assert.equal(await page.text('#main .blankslate h2'), S.profile.unknown);
   noErrors(page);
   await page.close();
 });

@@ -77,6 +77,7 @@
   --avatar-borderColor: var(--borderColor-translucent);
   --bgColor-accent-emphasis: #0969da;
   --bgColor-accent-muted: #ddf4ff;
+  --bgColor-attention-emphasis: #9a6700;
   --bgColor-attention-muted: #fff8c5;
   --bgColor-closed-emphasis: var(--bgColor-danger-emphasis);
   --bgColor-danger-emphasis: #cf222e;
@@ -90,6 +91,8 @@
   --bgColor-neutral-emphasis: #59636e;
   --bgColor-neutral-muted: #818b981f;
   --bgColor-open-emphasis: var(--bgColor-success-emphasis);
+  --bgColor-severe-emphasis: #bc4c00;
+  --bgColor-sponsors-emphasis: #bf3989;
   --bgColor-success-emphasis: #1f883d;
   --bgColor-success-muted: #dafbe1;
   --borderColor-accent-emphasis: #0969da;
@@ -159,9 +162,7 @@
   --data-green-color-emphasis: #30a147;
   --data-orange-color-emphasis: #eb670f;
   --data-pink-color-emphasis: #ce2c85;
-  --data-plum-color-emphasis: #a830e8;
   --data-purple-color-emphasis: #894ceb;
-  --data-red-color-emphasis: #df0c24;
   --data-teal-color-emphasis: #179b9b;
   --diffBlob-additionLine-bgColor: var(--bgColor-success-muted);
   --diffBlob-additionNum-bgColor: #aceebb;
@@ -199,6 +200,7 @@
   --avatar-borderColor: var(--borderColor-translucent);
   --bgColor-accent-emphasis: #1f6feb;
   --bgColor-accent-muted: #388bfd1a;
+  --bgColor-attention-emphasis: #9e6a03;
   --bgColor-attention-muted: #bb800926;
   --bgColor-closed-emphasis: var(--bgColor-danger-emphasis);
   --bgColor-danger-emphasis: #da3633;
@@ -212,6 +214,8 @@
   --bgColor-neutral-emphasis: #656c76;
   --bgColor-neutral-muted: #656c7633;
   --bgColor-open-emphasis: var(--bgColor-success-emphasis);
+  --bgColor-severe-emphasis: #bd561d;
+  --bgColor-sponsors-emphasis: #bf4b8a;
   --bgColor-success-emphasis: #238636;
   --bgColor-success-muted: #2ea04326;
   --borderColor-accent-emphasis: #1f6feb;
@@ -281,9 +285,7 @@
   --data-green-color-emphasis: #2f6f37;
   --data-orange-color-emphasis: #984b10;
   --data-pink-color-emphasis: #d34591;
-  --data-plum-color-emphasis: #b643ef;
   --data-purple-color-emphasis: #975bf1;
-  --data-red-color-emphasis: #eb3342;
   --data-teal-color-emphasis: #106c70;
   --diffBlob-additionLine-bgColor: var(--bgColor-success-muted);
   --diffBlob-additionNum-bgColor: #3fb9504d;
@@ -321,6 +323,7 @@
   --avatar-borderColor: var(--borderColor-translucent);
   --bgColor-accent-emphasis: #316dca;
   --bgColor-accent-muted: #4184e41a;
+  --bgColor-attention-emphasis: #966600;
   --bgColor-attention-muted: #ae7c1426;
   --bgColor-closed-emphasis: var(--bgColor-danger-emphasis);
   --bgColor-danger-emphasis: #c93c37;
@@ -334,6 +337,8 @@
   --bgColor-neutral-emphasis: #656c76;
   --bgColor-neutral-muted: #656c7633;
   --bgColor-open-emphasis: var(--bgColor-success-emphasis);
+  --bgColor-severe-emphasis: #ae5622;
+  --bgColor-sponsors-emphasis: #ae4c82;
   --bgColor-success-emphasis: #347d39;
   --bgColor-success-muted: #46954a26;
   --borderColor-accent-emphasis: #316dca;
@@ -402,9 +407,7 @@
   --data-green-color-emphasis: #2f6f37;
   --data-orange-color-emphasis: #984b10;
   --data-pink-color-emphasis: #d34591;
-  --data-plum-color-emphasis: #b643ef;
   --data-purple-color-emphasis: #975bf1;
-  --data-red-color-emphasis: #eb3342;
   --data-teal-color-emphasis: #106c70;
   --diffBlob-additionLine-bgColor: var(--bgColor-success-muted);
   --diffBlob-additionNum-bgColor: #57ab5a4d;
@@ -442,6 +445,7 @@
   --avatar-borderColor: var(--borderColor-emphasis);
   --bgColor-accent-emphasis: #0349b4;
   --bgColor-accent-muted: #dff7ff;
+  --bgColor-attention-emphasis: #744500;
   --bgColor-attention-muted: #fcf7be;
   --bgColor-closed-emphasis: var(--bgColor-danger-emphasis);
   --bgColor-danger-emphasis: #a0111f;
@@ -455,6 +459,8 @@
   --bgColor-neutral-emphasis: #454c54;
   --bgColor-neutral-muted: #e0e6eb;
   --bgColor-open-emphasis: var(--bgColor-success-emphasis);
+  --bgColor-severe-emphasis: #873800;
+  --bgColor-sponsors-emphasis: #971368;
   --bgColor-success-emphasis: #055d20;
   --bgColor-success-muted: #d2fedb;
   --borderColor-accent-emphasis: #0349b4;
@@ -525,9 +531,7 @@
   --data-green-color-emphasis: #30a147;
   --data-orange-color-emphasis: #eb670f;
   --data-pink-color-emphasis: #ce2c85;
-  --data-plum-color-emphasis: #a830e8;
   --data-purple-color-emphasis: #894ceb;
-  --data-red-color-emphasis: #df0c24;
   --data-teal-color-emphasis: #179b9b;
   --diffBlob-additionLine-bgColor: var(--bgColor-success-muted);
   --diffBlob-additionNum-bgColor: #82e596;
@@ -565,6 +569,7 @@
   --avatar-borderColor: var(--borderColor-emphasis);
   --bgColor-accent-emphasis: #194fb1;
   --bgColor-accent-muted: #5cacff1a;
+  --bgColor-attention-emphasis: #7b4900;
   --bgColor-attention-muted: #edaa2726;
   --bgColor-closed-emphasis: var(--bgColor-danger-emphasis);
   --bgColor-danger-emphasis: #ad0116;
@@ -578,6 +583,8 @@
   --bgColor-neutral-emphasis: #3d444d;
   --bgColor-neutral-muted: #212830;
   --bgColor-open-emphasis: var(--bgColor-success-emphasis);
+  --bgColor-severe-emphasis: #8f3c00;
+  --bgColor-sponsors-emphasis: #9c1d6a;
   --bgColor-success-emphasis: #006222;
   --bgColor-success-muted: #0ac74026;
   --borderColor-accent-emphasis: #409eff;
@@ -648,9 +655,7 @@
   --data-green-color-emphasis: #2f6f37;
   --data-orange-color-emphasis: #984b10;
   --data-pink-color-emphasis: #d34591;
-  --data-plum-color-emphasis: #b643ef;
   --data-purple-color-emphasis: #975bf1;
-  --data-red-color-emphasis: #eb3342;
   --data-teal-color-emphasis: #106c70;
   --diffBlob-additionLine-bgColor: #0ac74033;
   --diffBlob-additionNum-bgColor: #28d7514d;

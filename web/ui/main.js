@@ -15,12 +15,12 @@ import * as house from './home.js';
 import * as around from './around.js';
 import * as activity from './activity.js';
 import * as actions from './actions.js';
-import { counter, unsynced } from './components.js';
+import { counter, unsynced, el } from './components.js';
 import { PRODUCT } from './strings.js';
 import { route, notFound, onError, afterEach, start } from './router.js';
 import { drawFrame, drawUpdateNotice, setRepoContext, setScreenKeys, startChrome } from './chrome.js';
 import { profile, signedIn, applyTheme, watchTheme } from './session.js';
-import { home, welcome, newRepository, openRepository, settings, notFoundPage, errorPage } from './pages.js';
+import { home, welcome, newRepository, openRepository, settings, notFoundPage, errorPage, different } from './pages.js';
 import { gallery } from './gallery.js';
 
 applyTheme();
@@ -40,6 +40,7 @@ route('/open', openRepository);
 route('/settings', (context) => settings({ ...context, params: { tab: 'profile' } }));
 route('/settings/:tab', settings);
 route('/-/gallery', gallery);
+route('/different', different);
 route('/issues', async (context) => ((await signedIn()) ? issues.everywhere(context) : home(context)));
 route('/pulls', async (context) => ((await signedIn()) ? pulls.everywhere(context) : home(context)));
 // Repository screens: /{owner}/{repo}, then a view and what it needs.
@@ -86,6 +87,9 @@ onError(errorPage);
 let first = true;
 afterEach(async ({ path, result }) => {
   document.title = result.title ? `${result.title} · ${PRODUCT}` : PRODUCT;
+  // Every screen has one top heading. Where the design shows none, the screen's name is there for a screen reader.
+  const main = document.getElementById('main');
+  if (![...main.querySelectorAll('h1')].some((node) => !node.closest('.markdown'))) main.prepend(el('h1', { class: 'sr-only' }, (result.title || PRODUCT).split(' · ')[0]));
   setRepoContext(result.repo || null);
   setScreenKeys(result.keys || []);
   // The Issues tab shows how many are open. It is filled in after the screen, because reading the log takes a moment.

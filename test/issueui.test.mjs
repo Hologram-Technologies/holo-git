@@ -52,7 +52,7 @@ test('an issue: opened from an empty list, discussed, renamed, closed and reopen
   const page = await withRepo();
   await page.click('#main nav.tabs a', S.repo.issues);
   await page.arrive(`${REPO}/issues`);
-  assert.equal(await page.text('#main .blankslate h3'), S.issues.none);
+  assert.equal(await page.text('#main .blankslate h2'), S.issues.none);
   await page.eval('document.activeElement.blur()');
   await page.press('c');
   await page.arrive(`${REPO}/issues/new`);
@@ -100,7 +100,7 @@ test('an issue: opened from an empty list, discussed, renamed, closed and reopen
   assert.equal(await count(page, '.comment'), 2);
 
   await go(page, `${REPO}/issues/99`);
-  assert.equal(await page.text('#main .blankslate h3'), S.issues.notFound);
+  assert.equal(await page.text('#main .blankslate h2'), S.issues.notFound);
   noErrors(page);
   await page.close();
 });
@@ -109,7 +109,7 @@ test('labels and milestones: made, put on an issue, counted, and removed; bad na
   const page = await withRepo();
   await newIssue(page, 'Formatting drops leading zeros');
   await go(page, `${REPO}/labels`);
-  assert.equal(await page.text('#main .blankslate h3'), S.issues.noLabelsYet);
+  assert.equal(await page.text('#main .blankslate h2'), S.issues.noLabelsYet);
   await page.click('.page-head button', S.issues.newLabel);
   // Failures: blank name, then a colour that is not one.
   await page.click('button', S.issues.createLabel);
@@ -159,7 +159,7 @@ test('labels and milestones: made, put on an issue, counted, and removed; bad na
   await go(page, `${REPO}/milestones`);
   assert.match(await page.text('.milestone-row'), new RegExp(S.issues.complete(100)));
   await page.click('[data-toggle="v1.0"]');
-  await page.waitFor(`document.querySelector('#main .blankslate h3') && document.querySelector('#main .blankslate h3').textContent === ${JSON.stringify(S.issues.noMilestonesYet)}`, 'the milestone to leave the open list');
+  await page.waitFor(`document.querySelector('#main .blankslate h2') && document.querySelector('#main .blankslate h2').textContent === ${JSON.stringify(S.issues.noMilestonesYet)}`, 'the milestone to leave the open list');
 
   await go(page, `${REPO}/labels`);
   await page.click('[data-delete="bug"]');
@@ -167,7 +167,7 @@ test('labels and milestones: made, put on an issue, counted, and removed; bad na
   await go(page, `${REPO}/issues/1`);
   assert.equal(await count(page, '.side-section .label'), 0, 'a deleted label leaves its issues');
   await go(page, `${REPO}/milestone/${'0'.repeat(32)}`);
-  assert.equal(await page.text('#main .blankslate h3'), S.issues.milestoneNotFound);
+  assert.equal(await page.text('#main .blankslate h2'), S.issues.milestoneNotFound);
   noErrors(page);
   await page.close();
 });
@@ -214,7 +214,7 @@ test('the list: open and closed counts, filters by label and words, sorting; a s
   // Failure: nothing matches.
   await page.fill('[data-issue-search]', 'is:open zzzqqq');
   await page.press('Enter');
-  await page.waitFor(`document.querySelector('#main .blankslate h3') && document.querySelector('#main .blankslate h3').textContent === ${JSON.stringify(S.issues.noMatch)}`, 'the no-match line');
+  await page.waitFor(`document.querySelector('#main .blankslate h2') && document.querySelector('#main .blankslate h2').textContent === ${JSON.stringify(S.issues.noMatch)}`, 'the no-match line');
 
   // Across repositories: a second repository with an issue of its own.
   await page.goto(`${site.url}new`);
@@ -227,7 +227,7 @@ test('the list: open and closed counts, filters by label and words, sorting; a s
   assert.deepEqual((await titles()).sort(), ['Add a verbose option', 'An issue elsewhere', 'Formatting drops leading zeros']);
   assert.match(await page.text('.box'), /ada-example\/other/);
   await page.click('.sidenav a', S.issues.scopes.assigned);
-  await page.waitFor(`document.querySelector('#main .blankslate h3') && document.querySelector('#main .blankslate h3').textContent === ${JSON.stringify(S.issues.noneHere)}`, 'nothing assigned');
+  await page.waitFor(`document.querySelector('#main .blankslate h2') && document.querySelector('#main .blankslate h2').textContent === ${JSON.stringify(S.issues.noneHere)}`, 'nothing assigned');
   noErrors(page);
   await page.close();
 });

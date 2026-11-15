@@ -188,3 +188,10 @@ export function errorPage(error) {
   show('', blankslate({ icon: 'alert', title: S.failed.title, text: S.failed.lead, action: button({ label: S.failed.action, onclick: () => location.reload() }) }));
   return { title: S.failed.title };
 }
+
+// What a person who knows other git hosts should know before relying on this one.
+export function different() {
+  show('form', el('h1', { class: 'page-title' }, S.different.title), el('p', { class: 'muted' }, S.different.lead),
+    el('div', { class: 'stack different' }, Object.values(S.different.points).map((point) => el('section', {}, el('h2', {}, point.title), el('p', {}, point.text)))));
+  return { title: S.different.title };
+}

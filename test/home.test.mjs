@@ -67,7 +67,7 @@ test('dashboard, profile and explore: what happened, a year of contributions, an
   assert.deepEqual(await page.eval("[...document.querySelectorAll('.repo-list a.title')].map((a) => a.textContent)"), ['ada-example / demo']);
   // Failure: a filter that matches nothing.
   await page.fill('.dashboard aside input', 'zzzz');
-  await page.waitFor(`document.querySelector('.repo-list .blankslate h3') && document.querySelector('.repo-list .blankslate h3').textContent === ${JSON.stringify(S.home.noMatch)}`, 'the no-match line');
+  await page.waitFor(`document.querySelector('.repo-list .blankslate h2') && document.querySelector('.repo-list .blankslate h2').textContent === ${JSON.stringify(S.home.noMatch)}`, 'the no-match line');
 
   await go(page, '/ada-example');
   assert.equal(await page.text('.profile h1'), 'Ada Example');
@@ -76,7 +76,7 @@ test('dashboard, profile and explore: what happened, a year of contributions, an
   await page.click('.profile nav.tabs a[href$="tab=repositories"]');
   await page.waitFor("location.search === '?tab=repositories'", 'the repositories tab');
   await go(page, '/nobody-here');
-  assert.equal(await page.text('#main .blankslate h3'), S.profile.unknown);
+  assert.equal(await page.text('#main .blankslate h2'), S.profile.unknown);
 
   await page.click('#header a', S.header.explore);
   await page.arrive('/explore/repos');
@@ -86,7 +86,7 @@ test('dashboard, profile and explore: what happened, a year of contributions, an
   await page.arrive('/explore/users');
   assert.deepEqual(await page.eval("[...document.querySelectorAll('#main a.title')].map((a) => a.textContent)"), ['ada-example']);
   await go(page, '/explore/repos?q=zzzz');
-  assert.equal(await page.text('#main .blankslate h3'), S.explore.noMatch);
+  assert.equal(await page.text('#main .blankslate h2'), S.explore.noMatch);
   noErrors(page);
   await page.close();
 });
@@ -102,7 +102,7 @@ test('search and the command palette: found from the header box and from the key
   await page.press('Enter');
   await page.arrive('/search');
   assert.deepEqual(await page.eval("[...document.querySelectorAll('.sidenav a')].map((a) => a.dataset.kind + ':' + a.querySelector('.counter').textContent)"), ['repositories:0', 'issues:1', 'pulls:0']);
-  assert.equal(await page.text('#main .blankslate h3'), S.search.none('zeros'), 'no repository is called that');
+  assert.equal(await page.text('#main .blankslate h2'), S.search.none('zeros'), 'no repository is called that');
   await page.click('.sidenav a[data-kind=issues]');
   await page.waitFor("location.search.includes('type=issues') && !!document.querySelector('#main a.title')", 'the issue results');
   assert.deepEqual(await page.eval("[...document.querySelectorAll('#main a.title')].map((a) => a.textContent)"), ['Formatting drops leading zeros']);
@@ -183,7 +183,7 @@ test('two people, one remote: a comment arrives as a notification, and another p
   assert.match(await ada.text('#main'), /Bob Builder/);
   assert.match(await ada.text('#main'), /With leading zeros, I think\./);
   await go(ada, '/notifications');
-  assert.equal(await ada.text('#main .blankslate h3'), S.notifications.caughtUp, 'reading it marked it read');
+  assert.equal(await ada.text('#main .blankslate h2'), S.notifications.caughtUp, 'reading it marked it read');
   assert.equal(await ada.exists('#header [data-bell].unread'), false);
 
   // A rule asks for one approving review. Ada proposes; her own approval would not count.
