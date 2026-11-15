@@ -51,7 +51,7 @@ The strings file was read as a whole, and three checks were added so the review 
 - **The banned-word scan now catches word forms.** "Recorded" had passed where "record" would not. It was in the email hint on the first-run screen; that now reads "Written into your commits."
 - Two lines on the Actions run page used "content" where a GitHub user would say files. They now read "no branch has these files now" and "Every result for these files".
 
-The file holds 782 strings. Two words the scan does not see are shown on purpose and need a decision: the product's name, and the path of the checks file.
+The file holds 782 strings. Two words the scan does not see are shown on purpose: the product's name, and the path of the checks file. The name was decided on 2026-11-15: it stays, as the one exception, and the scan lets through the exact name only. The path still needs a decision.
 
 ## The "What is different" page
 
@@ -88,8 +88,7 @@ Built and tested, phase by phase: the foundation and first run; Code; Issues; Pu
 - Reference captures beside ours for the screens of phases 6 to 9.
 
 **Decisions waiting.**
-- The product's name contains a word the interface otherwise never shows.
-- The checks file path does too.
+- The checks file path contains a word the interface otherwise never shows.
 - "Push" or "Publish" as the one word for sending changes: both are used, Publish the first time and Push after.
 
 ## Not verified in this phase

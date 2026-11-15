@@ -17,7 +17,8 @@ const BANNED = [['Prism', /prism/i], ['UOR', /\buor\b/i], ['kappa', /kappa/i], [
 // "label" is banned in the content-address sense only; issue labels are a feature. These entries use it in that sense.
 const LABEL_ALLOWED = new Set(['gallery.small']);
 const banned = (text, { labels = false } = {}) => BANNED.filter(([name, pattern]) => !(labels && name === 'label') && pattern.test(text)).map(([name]) => name);
-// The product's name is the one exemption, pending a decision on the name.
+// The product's name is the one exemption, decided 2026-11-15: it is a name, not wording, and it stays.
+// Only the exact name is let through; the word on its own is still caught.
 const withoutName = (text) => text.split(PRODUCT).join('');
 
 function collect(node, path = [], out = []) {
