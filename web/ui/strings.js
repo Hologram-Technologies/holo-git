@@ -95,7 +95,7 @@ export const S = {
   failed: { title: 'Something went wrong', lead: 'Reload the page. If it happens again, check your connection.', action: 'Reload' },
   repo: {
     code: 'Code', pulls: 'Pull requests', commits: 'Commits', notHere: 'This repository is not in this browser.', openByAddress: 'Open by address', navigation: 'Repository',
-    local: 'Local', settings: 'Settings', issues: 'Issues', projects: 'Projects', releases: 'Releases', wiki: 'Wiki', activity: 'Activity',
+    local: 'Local', settings: 'Settings', issues: 'Issues', actions: 'Actions', projects: 'Projects', releases: 'Releases', wiki: 'Wiki', activity: 'Activity',
   },
   repoSettings: {
     general: 'General', collaborators: 'Collaborators', remote: 'Remote', saved: 'Settings saved.',
@@ -193,6 +193,16 @@ export const S = {
     updated: 'updated', by: 'by', noTags: 'There are no tags yet.',
     noResults: (q) => `No files or lines match "${q}".`, results: (n, branch) => `${n} ${n === 1 ? 'file' : 'files'} on ${branch}`, searchTruncated: (n) => `Only the first ${n} files were searched.`,
     shortcuts: 'This screen',
+  },
+  actions: {
+    title: 'Actions', all: 'All checks', checks: 'Checks', none: 'No checks are set up.', noneText: ['Checks are described in ', ' on a branch. They run on a contributor\'s machine, and each result appears here.'],
+    statusOn: (branch) => `Where ${branch} stands`, states: { pass: 'Passed', fail: 'Failed', waiting: 'Not run for this commit', unknown: 'Waits for another check' },
+    resultCount: (n) => `${n} ${n === 1 ? 'result' : 'results'}`, noResults: 'No results yet.', noResultsText: 'A result appears here when someone with write access runs a check and reports it.', noMatch: 'No results match these filters.', clear: 'Clear filters',
+    reportedBy: (name) => `reported by ${name}`, reported: 'reported this', branch: 'Branch', status: 'Status', person: 'Person', anyBranch: 'All branches', anyStatus: 'Any status', anyone: 'Anyone',
+    back: 'All results', notFound: 'There is no result at that address.', jobs: 'Jobs', steps: 'Steps', toolStep: 'Confirm a tool:', mustPrint: 'It must print', runStep: 'Run', inFolder: 'in the folder',
+    reads: 'Reads', environment: 'Environment', needs: 'Needs', produces: 'Produces', appliesTo: 'applies to', noBranch: 'no branch is at this content now',
+    describedNow: (branch) => `Shown as ${branch} describes this check now. It may have been different when this ran.`, noDefinition: 'No branch describes this check any more.',
+    log: 'Output', noLog: 'No output was kept for this run.', noLogText: 'Only the result is kept. Run the check on your own machine to see what it prints.', earlier: 'Every result for this content',
   },
   releases: {
     title: 'Releases', new: 'New release', none: 'There are no releases yet.', noneText: 'A release marks a commit as a version and says what changed.',

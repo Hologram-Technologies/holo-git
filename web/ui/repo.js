@@ -79,7 +79,7 @@ export function repoHeader(context, tab) {
     el('div', { class: 'title' }, icon('repo', { class: 'fg-muted' }), el('a', { href: href('/') }, ownerOf(repo)), el('span', { class: 'muted' }, '/'), el('a', { class: 'name', href: repoHref(repo) }, repo.name),
       repo.url ? '' : label(S.repo.local)),
     tabs([{ label: S.repo.code, icon: 'code', href: repoHref(repo), current: tab === 'code' }, { key: 'issues', label: S.repo.issues, icon: 'issue-opened', href: repoHref(repo, 'issues'), current: tab === 'issues' }, { label: S.repo.pulls, icon: 'git-pull-request', href: repoHref(repo, 'pulls'), current: tab === 'pulls' },
-      { label: S.repo.projects, icon: 'project', href: repoHref(repo, 'projects'), current: tab === 'projects' }, { label: S.repo.releases, icon: 'tag', href: repoHref(repo, 'releases'), current: tab === 'releases' },
+      { label: S.repo.actions, icon: 'play', href: repoHref(repo, 'actions'), current: tab === 'actions' }, { label: S.repo.projects, icon: 'project', href: repoHref(repo, 'projects'), current: tab === 'projects' }, { label: S.repo.releases, icon: 'tag', href: repoHref(repo, 'releases'), current: tab === 'releases' },
       { label: S.repo.wiki, icon: 'book', href: repoHref(repo, 'wiki'), current: tab === 'wiki' }, { label: S.repo.activity, icon: 'pulse', href: repoHref(repo, 'activity'), current: tab === 'activity' },
       { label: S.repo.settings, icon: 'gear', href: repoHref(repo, 'settings'), current: tab === 'settings' }], { label: S.repo.navigation }));
 }

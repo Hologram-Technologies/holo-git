@@ -14,6 +14,7 @@ import * as pulls from './pulls.js';
 import * as house from './home.js';
 import * as around from './around.js';
 import * as activity from './activity.js';
+import * as actions from './actions.js';
 import { counter, unsynced } from './components.js';
 import { PRODUCT } from './strings.js';
 import { route, notFound, onError, afterEach, start } from './router.js';
@@ -66,6 +67,7 @@ async function repository({ params }) {
     case 'milestone': return issues.milestone(context, more[0]);
     case 'pulls': return pulls.list(context);
     case 'pull': return ({ commits: pulls.commits, checks: pulls.checksTab, files: pulls.files }[more[1]] || pulls.conversation)(context, more[0]);
+    case 'actions': return more[0] === 'runs' && more[1] && !more[2] ? actions.run(context, more[1]) : more[0] ? notFoundPage() : actions.list(context);
     case 'releases': return around.releases(context, more);
     case 'wiki': return around.wiki(context, more);
     case 'projects': return around.projects(context, more);

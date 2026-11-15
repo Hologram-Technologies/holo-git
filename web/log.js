@@ -34,7 +34,7 @@ const pullKey = (ref, head) => `${ref}\n${head}`;
 // (before a clone has fetched any objects) such changes are listed in `unverified`, and the
 // caller must fold again, strictly, once the objects are there.
 export async function fold(records, { strict = false } = {}) {
-  const state = { owner: records.length ? records[0].key : null, heads: {}, grants: new Map(), protections: new Map(), pulls: [], checks: new Map(), digest: '', count: records.length, unverified: [],
+  const state = { owner: records.length ? records[0].key : null, heads: {}, grants: new Map(), protections: new Map(), pulls: [], checks: new Map(), runs: [], digest: '', count: records.length, unverified: [],
     issues: [], labels: new Map(), milestones: [], releases: [], wiki: new Map(), projects: [],
     // The name each person last signed with. It is what they call themselves, nothing more.
     names: new Map() };
@@ -259,9 +259,10 @@ export async function fold(records, { strict = false } = {}) {
       if (!isCheckName(record.name) || !/^[0-9a-f]{64}$/.test(record.action) || !['pass', 'fail'].includes(record.result)) throw new Error('refused: a malformed check result in the log');
       // The latest result under a key stands. An earlier one is still in the log for anyone to see.
       const earlier = state.checks.get(record.action);
+      state.runs.push({ name: record.name, action: record.action, result: record.result, by: record.key, time: record.time });
       state.checks.set(record.action, { name: record.name, result: record.result, by: record.key, time: record.time, changed: Boolean(earlier && earlier.result !== record.result) || Boolean(earlier && earlier.changed) });
     }
-    if (record.name) state.names.set(record.key, String(record.name).slice(0, 100));
+    if (record.name && !['label', 'label-remove', 'check'].includes(type)) state.names.set(record.key, String(record.name).slice(0, 100));
     state.digest = await recordDigest(record);
   }
   // For each pull request, how many of its approvals would count if it were merged now.
