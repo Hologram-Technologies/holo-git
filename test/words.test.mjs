@@ -19,6 +19,8 @@ const LABEL_ALLOWED = new Set(['gallery.small']);
 const banned = (text, { labels = false } = {}) => BANNED.filter(([name, pattern]) => !(labels && name === 'label') && pattern.test(text)).map(([name]) => name);
 // The product's name is the one exemption, decided 2026-11-15: it is a name, not wording, and it stays.
 // Only the exact name is let through; the word on its own is still caught.
+// The checks file path (CHECKS_PATH, shown on the empty Actions screen) is the product's own folder and stays too,
+// decided 2026-11-16. It is a path, never typed into wording, so the scan does not meet it.
 const withoutName = (text) => text.split(PRODUCT).join('');
 
 function collect(node, path = [], out = []) {
