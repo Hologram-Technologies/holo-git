@@ -56,14 +56,18 @@ export async function commits(context, at) {
 }
 
 // One file's change as rows for a diff table, with three lines of context around each change and a header per hunk.
-const MAX_DIFF_LINES = 3000;
-async function fileRows(change, oldTree, newTree) {
+// Comparing is cheap (a 10,000-line file rewritten whole takes about 35 ms), so every file is compared and every
+// count is true. Drawing is what costs: a change of more than DRAWN rows waits behind "Load diff", as on GitHub.
+// Only a file over HUGE bytes is not read until asked, and then it has no count rather than a false one.
+const DRAWN = 1500;
+const HUGE = 2 * 1024 * 1024;
+async function fileRows(change, oldTree, newTree, { all: everything = false } = {}) {
   const read = async (tree) => { if (!tree) return new Uint8Array(); try { return open(await getObject((await lookup(tree, change.path)).id)).content; } catch { return new Uint8Array(); } };
   const before = change.status === 'added' ? new Uint8Array() : await read(oldTree);
   const after = change.status === 'removed' ? new Uint8Array() : await read(newTree);
   if (isBinary(before) || isBinary(after)) return { note: S.code.binary, added: 0, removed: 0 };
+  if (!everything && before.length + after.length > HUGE) return { note: S.code.hugeFile, added: null, removed: null, load: true };
   const a = splitLines(before); const b = splitLines(after);
-  if (a.length + b.length > MAX_DIFF_LINES) return { note: S.code.largeDiff, added: 0, removed: 0, load: true };
   const all = [];
   let i = 0; let j = 0;
   const text = (line) => decode(line).replace(/\r?\n$/, '');
@@ -83,7 +87,9 @@ async function fileRows(change, oldTree, newTree) {
   };
   all.forEach((row, at) => { if (keep[at]) { if (start < 0) start = at; } else close(at); });
   close(all.length);
-  return { rows, added: all.filter((r) => r.op === '+').length, removed: all.filter((r) => r.op === '-').length };
+  const added = all.filter((r) => r.op === '+').length; const removed = all.filter((r) => r.op === '-').length;
+  if (!everything && rows.length > DRAWN) return { rows, added, removed, note: S.code.largeDiff(added + removed), load: true };
+  return { rows, added, removed };
 }
 
 // hooks.cell(path, row, tr) may return a control for the line; hooks.after(path, row) may return rows to show under it.
@@ -114,21 +120,33 @@ export async function changes(context, oldTree, newTree, fileRef, hooks = {}) {
   let mode = saved('diff-view', 'unified') === 'split' && window.innerWidth >= 768 ? 'split' : 'unified';
   const files = [];
   let added = 0; let removed = 0;
-  for (const change of list) { const result = await fileRows(change, oldTree, newTree); added += result.added; removed += result.removed; files.push({ change, result }); }
+  for (const change of list) { const result = await fileRows(change, oldTree, newTree); added += result.added || 0; removed += result.removed || 0; files.push({ change, result }); }
   const bodies = [];
-  const sections = files.map(({ change, result }, index) => {
+  // A file not yet read has no count: an empty place, never +0 −0.
+  const stat = (result) => (result.added === null ? el('span', { class: 'diffstat' }) : diffstat(result.added, result.removed));
+  const sections = files.map((file, index) => {
+    const { change } = file;
     const body = el('div', { class: 'diff-body' });
-    const draw = () => body.replaceChildren(result.rows ? (mode === 'split' ? split(result.rows) : unified(result.rows, hooks, change.path)) : el('p', { class: 'box-body muted' }, result.note));
+    const head = el('span', {}, stat(file.result));
+    const draw = () => {
+      const { result } = file;
+      if (result.rows && !result.load) { body.replaceChildren(mode === 'split' ? split(result.rows) : unified(result.rows, hooks, change.path)); return; }
+      body.replaceChildren(el('div', { class: 'box-body stack condensed diff-wait' }, el('p', { class: 'muted' }, result.note), result.load ? el('div', {}, button({ label: S.code.loadDiff, size: 'small', attrs: { 'data-load-diff': '' }, onclick: async () => {
+        file.result = result.rows ? { ...result, load: false } : await fileRows(change, oldTree, newTree, { all: true });
+        head.replaceChildren(stat(file.result));
+        draw();
+      } })) : ''));
+    };
     draw(); bodies.push(draw);
     const [name, tone] = STATUS[change.status];
     const details = el('details', { class: 'box diff-file', open: true, id: `diff-${index}` }, el('summary', { class: 'box-head' }, icon('chevron-down', { class: 'fold' }), icon(name, { label: S.code.status[change.status], class: tone }),
-      change.status === 'removed' ? el('span', { class: 'mono' }, change.path) : el('a', { class: 'mono', href: repoHref(context.repo, 'blob', fileRef, change.path) }, change.path), el('span', { class: 'spacer' }), diffstat(result.added, result.removed)), body);
+      change.status === 'removed' ? el('span', { class: 'mono' }, change.path) : el('a', { class: 'mono', href: repoHref(context.repo, 'blob', fileRef, change.path) }, change.path), el('span', { class: 'spacer' }), head), body);
     if (hooks.file) hooks.file(change, details);
     return details;
   });
   const summary = el('div', { class: 'row' }, el('span', {}, S.code.showing(list.length, added, removed)), el('span', { class: 'spacer' }),
     segmented([{ value: 'unified', label: S.code.unified }, { value: 'split', label: S.code.split }], mode, (value) => { mode = value; save('diff-view', value); bodies.forEach((draw) => draw()); }));
-  const index = list.length > 1 ? box({ class: 'diff-index', rows: files.map(({ change, result }, at) => el('a', { class: 'box-row', href: `#diff-${at}` }, icon(STATUS[change.status][0], { class: STATUS[change.status][1] }), el('span', { class: 'main mono' }, change.path), diffstat(result.added, result.removed))) }) : '';
+  const index = list.length > 1 ? box({ class: 'diff-index', rows: files.map(({ change, result }, at) => el('a', { class: 'box-row', href: `#diff-${at}` }, icon(STATUS[change.status][0], { class: STATUS[change.status][1] }), el('span', { class: 'main mono' }, change.path), stat(result))) }) : '';
   return list.length ? [summary, index, ...sections] : [box({ body: blankslate({ icon: 'diff-modified', title: S.code.noDiff }) })];
 }
 

@@ -117,7 +117,8 @@ export async function fold(records, { strict = false } = {}) {
       if (record.ref in state.heads && record.old !== state.heads[record.ref]) throw new Error('refused: the log skips a ref value');
       state.heads[record.ref] = record.next;
       const pull = pulls.get(pullKey(record.ref, record.next));
-      if (pull) { pull.merged = true; pull.mergedAt = Number(record.time) || 0; }
+      // Where the branch stood just before the merge: what the pull request changed is read from there.
+      if (pull) { pull.merged = true; pull.mergedAt = Number(record.time) || 0; pull.mergedOnto = record.old || ''; }
     } else if (type === 'grant') {
       if (!GRANTABLE.includes(record.mode) || !/^[0-9a-f]{64}$/.test(record.subject)) throw new Error('refused: a malformed grant in the log');
       state.grants.set(record.subject, { mode: record.mode, notAfter: Number(record.notAfter) || 0, revoked: false, time: record.time });

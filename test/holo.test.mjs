@@ -67,6 +67,9 @@ test('someone without access cannot publish; with a grant they can propose and, 
   const theirs = scratch('bob');
   git(theirs, 'clone', '-q', work, 'repo');
   const bob = join(theirs, 'repo');
+  const start = git(bob, 'rev-parse', 'HEAD');
+  // Two commits offered at once: what the pull request changed starts at main, not at the last commit's parent.
+  const prepared = commit(bob, 'bob-notes.txt', 'notes\n', 'Bob prepares');
   const proposed = commit(bob, 'bob.txt', 'from bob\n', 'Bob adds a file');
   const denied = holo(bob, 'bob', 'publish');
   assert.equal(denied.status, 1);
@@ -85,7 +88,10 @@ test('someone without access cannot publish; with a grant they can propose and, 
   assert.equal(holo(bob, 'bob', 'merge', '--pull', '1').status, 1, 'the proposer\'s own approval does not count');
   ok(holo(work, 'alice', 'approve', '--pull', '1'));
   assert.match(ok(holo(bob, 'bob', 'merge', '--pull', '1')), /merged #1/);
-  assert.equal((await viewed()).heads['refs/heads/main'], proposed);
+  const state = await viewed();
+  assert.equal(state.heads['refs/heads/main'], proposed);
+  assert.equal(state.pulls[0].mergedOnto, start, 'the merge remembers where main stood before it');
+  assert.equal(git(bob, 'rev-parse', `${proposed}^`), prepared, 'so the last commit\'s parent would have been the wrong starting point');
 });
 
 test('fetch brings the replica\'s branch back into git, checked by git', () => {

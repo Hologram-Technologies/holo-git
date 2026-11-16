@@ -228,3 +228,35 @@ test('at 360 px wide the pull request screens do not overflow sideways', async (
   noErrors(page);
   await page.close();
 });
+
+test('a long file with a small change is shown with its true count; a large change waits behind Load diff', async () => {
+  const page = await withRepo();
+  const onCommit = () => page.waitFor("/\\/commit\\/[0-9a-f]{40}$/.test(document.documentElement.dataset.screen || '')", 'the commit');
+  const lines = (n, mark = '') => Array.from({ length: n }, (_, i) => `line ${i + 1}${mark}`).join('\n') + '\n';
+  // 4,000 lines: before the fix, any file whose two versions passed 3,000 lines was hidden and counted +0 −0.
+  await go(page, `${REPO}/new/main`);
+  await page.fill(await page.field(S.code.fileName), 'long.txt');
+  await page.fill('textarea', lines(4000));
+  await page.click('button', S.code.commitChanges);
+  await onCommit();
+
+  const small = lines(4000).replace('line 2000\n', 'line 2000, changed\n');
+  await change(page, 'long.txt', small, 'Change one line of a long file');
+  assert.equal(await count(page, 'details.diff-file table.diff'), 1, 'the change is drawn');
+  assert.equal(await count(page, 'table.diff tr.add'), 1);
+  assert.equal(await count(page, 'table.diff tr.del'), 1);
+  assert.match(await page.text('details.diff-file summary .diffstat'), /\+1\s*−1/);
+  assert.equal(await page.exists('[data-load-diff]'), false);
+
+  // Every line changed: counted at once, drawn only when asked.
+  await change(page, 'long.txt', lines(4000, ' again'), 'Change every line');
+  assert.equal(await count(page, 'details.diff-file table.diff'), 0, 'a large change is not drawn at once');
+  assert.match(await page.text('details.diff-file summary .diffstat'), /\+4000\s*−4000/);
+  assert.match(await page.text('#main'), /Showing 1 changed file with 4000 additions and 4000 deletions/);
+  assert.equal(await page.text('.diff-wait p'), S.code.largeDiff(8000));
+  await page.click('[data-load-diff]');
+  await page.waitFor("document.querySelectorAll('details.diff-file table.diff tr.add').length === 4000", 'the loaded diff');
+  assert.equal(await page.exists('[data-load-diff]'), false);
+  noErrors(page);
+  await page.close();
+});

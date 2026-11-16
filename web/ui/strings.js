@@ -188,7 +188,7 @@ export const S = {
     nameTaken: 'A file or folder with that name is in the way. Choose another name.', commitFailed: 'The commit could not be saved. Reload the page and try again.',
     copySha: 'Copy the full commit identifier', browseAt: 'Browse the repository at this point', browseFiles: 'Browse files', newer: 'Newer', older: 'Older', historyFor: 'History for',
     commitsOn: (date) => `Commits on ${date}`, commit: 'commit', parents: (n) => (n === 1 ? '1 parent' : `${n} parents`),
-    status: { added: 'Added', removed: 'Deleted', modified: 'Modified' }, unified: 'Unified', split: 'Split', noDiff: 'No files changed.', largeDiff: 'Large diffs are not shown.',
+    status: { added: 'Added', removed: 'Deleted', modified: 'Modified' }, unified: 'Unified', split: 'Split', noDiff: 'No files changed.', largeDiff: (n) => `This change is large: ${n.toLocaleString()} changed lines. It is not shown until you ask.`, loadDiff: 'Load diff', hugeFile: 'This file is too large to compare without asking.',
     showing: (n, a, d) => `Showing ${n} changed ${n === 1 ? 'file' : 'files'} with ${a} ${a === 1 ? 'addition' : 'additions'} and ${d} ${d === 1 ? 'deletion' : 'deletions'}.`,
     comparing: 'Comparing changes', base: 'base', compareWith: 'compare', identical: 'These two are the same. There is nothing to compare.', compare: 'Compare',
     updated: 'updated', by: 'by', noTags: 'There are no tags yet.',

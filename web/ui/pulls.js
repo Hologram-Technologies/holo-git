@@ -81,9 +81,10 @@ export function proposeForm(context, baseBranch, headId, headSubject) {
 async function span(context, pull) {
   const baseHead = context.refs[pull.ref];
   const head = (await resolveCommit(context.refs, pull.head)).commit;
-  let forkId = pull.merged ? null : await mergeBase(pull.head, baseHead).catch(() => null);
-  // Once merged, the branch contains the commit. What it changed is then read from its own first commit's parent.
-  if (pull.merged || !forkId) forkId = (await resolveCommit(context.refs, pull.first)).commit.parents[0] || null;
+  // Once merged, the branch contains the commit, so the change is read from where the branch stood just before
+  // the merge. Failing that, from the parent of the first commit proposed.
+  let forkId = await mergeBase(pull.head, pull.merged ? pull.mergedOnto : baseHead).catch(() => null);
+  if (!forkId || forkId === pull.head) forkId = (await resolveCommit(context.refs, pull.first)).commit.parents[0] || null;
   const forkTree = forkId ? (await resolveCommit(context.refs, forkId)).commit.tree : null;
   const commits = [];
   for (const item of await walk(pull.head, 250)) { if (item.id === forkId || (forkId && await isAncestor(item.id, forkId) === true)) continue; commits.push(item); }
