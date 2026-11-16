@@ -174,11 +174,11 @@ test('the remote: published, marked when it falls behind, and a conflict with an
   await ada.click('button', S.repoSettings.add);
   await ada.waitFor(`!!document.querySelector('[data-collaborator="${bobKey}"]')`, 'Bob in the list');
   await go(ada, `${REPO}/settings/remote`);
-  assert.equal(await ada.text('[data-push]'), S.remote.publish, 'the first time it is Publish');
+  assert.equal(await ada.text('[data-push]'), S.remote.push, 'the word is Push from the first time');
   await ada.fill(await ada.field(S.remote.address), url);
   await ada.click('[data-push]');
-  await flashIs(ada, 'success', S.remote.published);
-  assert.equal(await ada.text('[data-push]'), S.remote.push, 'after that it is Push');
+  await flashIs(ada, 'success', S.remote.pushed);
+  assert.equal(await ada.text('[data-push]'), S.remote.push);
   assert.equal(await ada.exists('.repo-head .unsynced'), false);
 
   // Bob opens it, changes the line, and publishes.
@@ -190,14 +190,14 @@ test('the remote: published, marked when it falls behind, and a conflict with an
   await onCommit(bob);
   await go(bob, '/127-0-0-1/demo/settings/remote');
   await bob.click('[data-push]');
-  await flashIs(bob, 'success', S.remote.published);
+  await flashIs(bob, 'success', S.remote.pushed);
 
   // Ada changes the same line. Her copy is now marked as not published.
   await write(ada, REPO, 'notes.txt', 'one, says Ada\n');
   await onCommit(ada);
   await go(ada, REPO);
   await ada.waitFor("!!document.querySelector('.repo-head .unsynced')", 'the not-published mark');
-  assert.equal(await ada.text('.repo-head .unsynced'), S.common.notPublished);
+  assert.equal(await ada.text('.repo-head .unsynced'), S.common.notPushed);
   await go(ada, `${REPO}/settings/remote`);
   await flashIs(ada, 'warning', S.remote.waiting(1));
   // Pushing first is refused: there is something to fetch.
@@ -217,7 +217,7 @@ test('the remote: published, marked when it falls behind, and a conflict with an
   assert.equal(await ada.text('#L1 td.text'), 'one, say Ada and Bob');
   await go(ada, `${REPO}/settings/remote`);
   await ada.click('[data-push]');
-  await flashIs(ada, 'success', S.remote.published);
+  await flashIs(ada, 'success', S.remote.pushed);
   // Bob fetches the merge.
   await go(bob, '/127-0-0-1/demo/settings/remote');
   await bob.click('[data-fetch]');

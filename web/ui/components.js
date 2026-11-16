@@ -116,7 +116,7 @@ export function avatar(name, { size = 20, square, src } = {}) {
 
 // The Verified badge. Trust details live behind it, so it is a button.
 export const verifiedBadge = (onclick) => el('button', { type: 'button', class: 'label success verified', onclick }, S.common.verified);
-export const unsynced = () => el('span', { class: 'unsynced' }, icon('dot-fill'), S.common.notPublished);
+export const unsynced = () => el('span', { class: 'unsynced' }, icon('dot-fill'), S.common.notPushed);
 
 // items: [{ label, href, icon, count, current }]
 export function tabs(items, { label: name, flush } = {}) {

@@ -146,14 +146,14 @@ export async function remote(context) {
   const where = () => address.control.value.trim().replace(/\/+$/, '');
   const busy = (control, on) => { control.disabled = on; if (on) control.setAttribute('aria-busy', 'true'); else control.removeAttribute('aria-busy'); };
   const say = (tone, text) => note.replaceChildren(flash(tone, text));
-  const pushButton = button({ label: known ? S.remote.push : S.remote.publish, kind: 'primary', icon: 'upload', attrs: { 'data-push': '' }, onclick: async () => {
+  const pushButton = button({ label: S.remote.push, kind: 'primary', icon: 'upload', attrs: { 'data-push': '' }, onclick: async () => {
     if (!valid()) return;
     busy(pushButton, true);
     try {
       const result = await push(repo, context.head, where());
       await setRepo({ ...repo, replica: where(), published: count });
-      // The screen is drawn again (the button changes from Publish to Push), so the message is handed across.
-      sessionStorage.setItem('remote-note', result.upToDate ? S.remote.upToDate : S.remote.published);
+      // The screen is drawn again, so the message is handed across.
+      sessionStorage.setItem('remote-note', result.upToDate ? S.remote.upToDate : S.remote.pushed);
       refresh();
     } catch (error) { busy(pushButton, false); say('error', /nothing to push/.test(error.message) ? S.remote.nothingYet : remoteProblem(error)); }
   } });
