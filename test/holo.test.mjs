@@ -94,3 +94,11 @@ test('fetch brings the replica\'s branch back into git, checked by git', () => {
   assert.equal(git(work, 'log', '-1', '--format=%s'), 'Bob adds a file');
   git(work, 'fsck', '--strict');
 });
+
+test('copying a repository says how much has arrived, for a screen to show', async () => {
+  await use(newDevice(), store);
+  const seen = [];
+  await gitjs.clone(url, (_, so) => { if (so) seen.push(so); });
+  assert.ok(seen.length >= 1, 'at least the final amount is reported');
+  assert.ok(seen.at(-1).objects > 0 && seen.at(-1).bytes > 0);
+});

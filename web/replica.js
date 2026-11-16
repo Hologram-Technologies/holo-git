@@ -177,7 +177,8 @@ export async function cloneReplica(base, name, state, report = () => {}) {
     await putObjects([{ id, envelope }]);
     stored += 1;
     bytes += envelope.length;
-    if (stored % 25 === 0) report(`fetched ${stored} objects`);
+    // The second argument is for a screen: how much has arrived so far. The total is not known until the walk ends.
+    if (stored % 25 === 0) report(`fetched ${stored} objects`, { objects: stored, bytes });
     const { kind, content } = open(envelope);
     if (kind === 'commit') {
       const commit = parseCommit(envelope);
@@ -192,7 +193,8 @@ export async function cloneReplica(base, name, state, report = () => {}) {
   // a protected branch must be seen to have only moved forward.
   // That needs every commit a protected branch passed through, including any that a later
   // rewind left unreachable from the head.
-  await fetchMissing(base, folded.unverified, report);
+  report(`fetched ${stored} objects`, { objects: stored, bytes });
+  await fetchMissing(base, folded.unverified);
   await fold(logs, { strict: true });
   const head = refs[state.head] ? state.head : Object.keys(refs)[0];
   const repo = { name, url: base, head, objects: stored, bytes, cloned: Date.now(), replica: base };

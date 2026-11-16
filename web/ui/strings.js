@@ -80,6 +80,7 @@ export const S = {
     open: 'Open repository', addressBlank: "Repository address can't be blank", addressInvalid: 'Enter a full address that starts with https:// or http://',
     failed: (reason) => `Could not open this repository. ${reason} Check the address and try again.`,
     unreachable: 'The address did not answer.',
+    copying: 'Copying the repository into this browser. Keep this page open.', copied: (count, amount) => `${count} ${count === 1 ? 'object' : 'objects'} copied so far, ${amount}`,
   },
   settings: {
     title: 'Settings', nav: 'Settings', profile: 'Profile', appearance: 'Appearance', security: 'Security', repositories: 'Repositories', storage: 'Storage',

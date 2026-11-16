@@ -6,7 +6,7 @@ import { href, navigate } from './router.js';
 import { profile, setProfile, hasKey, createKey, keyId, signedIn, THEMES, theme, setTheme } from './session.js';
 import { listRepos } from '../store.js';
 import { clone, createRepo } from '../git.js';
-import { repoHref, repoPath, ownerOf, slug } from './repo.js';
+import { repoHref, repoPath, ownerOf, slug, size } from './repo.js';
 
 const main = () => document.getElementById('main');
 function show(kind, ...children) {
@@ -105,6 +105,7 @@ export async function openRepository({ query }) {
   const address = field({ label: S.openRepo.address, control: textInput({ type: 'url', placeholder: S.openRepo.placeholder, value: query.get('address') || '', autofocus: true }) });
   const note = el('div', {});
   const submit = button({ label: S.openRepo.open, kind: 'primary', type: 'submit' });
+  const progress = el('div', { class: 'stack' });
   const form = el('form', { class: 'stack', novalidate: true, onsubmit: async (event) => {
     event.preventDefault();
     const value = address.control.value.trim();
@@ -112,16 +113,20 @@ export async function openRepository({ query }) {
     submit.disabled = true;
     submit.setAttribute('aria-busy', 'true');
     note.replaceChildren();
+    // The count changes many times a second, so a screen reader is told once that copying began and is spared the numbers.
+    const count = el('span', { class: 'muted', 'aria-hidden': 'true', 'data-copied': '' });
+    progress.replaceChildren(el('p', { role: 'status' }, S.openRepo.copying), count);
     try {
-      const repo = await clone(value);
+      const repo = await clone(value, (_, so) => { if (so) count.textContent = S.openRepo.copied(so.objects.toLocaleString(), size(so.bytes)); });
       navigate(repoPath(repo));
     } catch {
       submit.disabled = false;
       submit.removeAttribute('aria-busy');
+      progress.replaceChildren();
       note.replaceChildren(flash('error', S.openRepo.failed(S.openRepo.unreachable)));
       address.control.focus();
     }
-  } }, el('div', {}, el('h1', { class: 'page-title' }, S.openRepo.title), el('p', { class: 'muted' }, S.openRepo.lead)), note, address, el('div', {}, submit));
+  } }, el('div', {}, el('h1', { class: 'page-title' }, S.openRepo.title), el('p', { class: 'muted' }, S.openRepo.lead)), note, address, el('div', {}, submit), progress);
   show('form', form);
   address.control.focus();
   return { title: S.openRepo.title };
